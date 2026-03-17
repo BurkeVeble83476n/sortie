@@ -23,7 +23,7 @@ business logic. Every subsequent task assumes this foundation exists.
       passes on the empty project.
       **Verify:** `make lint` and `make fmt` exit 0 with no warnings.
 
-- [ ] 0.4 Set up CI: create `.github/workflows/ci.yml` that runs `make lint` and `make test`
+- [x] 0.4 Set up CI: create `.github/workflows/ci.yml` that runs `make lint` and `make test`
       on push and PR. Use a Go matrix build (latest stable Go version).
       **Verify:** push to GitHub triggers CI and all jobs pass.
 
