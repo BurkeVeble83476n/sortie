@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-03-17
 decision-makers: Serghei Iakovlev
 ---
@@ -108,11 +108,11 @@ The initial implementation ships with a **minimal, prompt-essential FuncMap** in
 the built-in actions (`if`, `else`, `range`, `with`, `and`, `or`, `not`, `eq`, `ne`, `lt`,
 `le`, `gt`, `ge`, `len`, `index`, `print`, `printf`, `println`, `call`):
 
-| Function | Signature | Purpose |
-| -------- | --------- | ------- |
-| `toJSON`  | `toJSON value -> string` | Serialize any value to a compact JSON string. Agents parse structured data more reliably from JSON than from Go's default `fmt` representation. Without this, workflow authors must manually `{{ range }}` over every nested structure to produce agent-readable output. |
-| `join`   | `join sep list -> string` | Join a list of strings with a separator. Common for rendering `issue.labels` as a comma-separated inline list instead of a verbose `{{ range }}` loop. |
-| `lower`  | `lower string -> string` | Lowercase a string. Useful for normalizing labels and states in prompt text. |
+| Function | Signature                 | Purpose                                                                                                                                                                                                                                                                  |
+| -------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `toJSON` | `toJSON value -> string`  | Serialize any value to a compact JSON string. Agents parse structured data more reliably from JSON than from Go's default `fmt` representation. Without this, workflow authors must manually `{{ range }}` over every nested structure to produce agent-readable output. |
+| `join`   | `join sep list -> string` | Join a list of strings with a separator. Common for rendering `issue.labels` as a comma-separated inline list instead of a verbose `{{ range }}` loop.                                                                                                                   |
+| `lower`  | `lower string -> string`  | Lowercase a string. Useful for normalizing labels and states in prompt text.                                                                                                                                                                                             |
 
 Each addition to `FuncMap` extends the permanent API surface and must be treated as a
 compatibility commitment. Functions beyond this initial set are added only when workflow
@@ -217,7 +217,7 @@ drivers are designed to prevent.
   demonstrates correct syntax for all three prompt modes.
 - **Error messages are terse and positional.** `text/template` errors report byte offsets
   and action numbers (e.g., `template: prompt:1:15: executing "prompt" at <.issue.titl>:
-  map has no entry for key "titl"`), not line-and-column positions relative to the original
+map has no entry for key "titl"`), not line-and-column positions relative to the original
   `WORKFLOW.md` file. When the prompt body starts after YAML front matter, the byte offset
   is relative to the template string, not the source file. If an engineer sees `line 2`
   but the actual error is on line 45 of `WORKFLOW.md` (after 43 lines of YAML front
@@ -259,8 +259,8 @@ drivers are designed to prevent.
   ADR-0004 for pre-commit and CI integration) must perform a static analysis pass that
   detects references to top-level data keys (`.issue`, `.attempt`, `.run`) inside
   `{{ range }}` blocks and emits a human-readable diagnostic: `"did you mean $.issue.title
-  instead of .issue.title? Inside {{ range }}, the dot refers to the current element, not
-  the root data."` This requires parsing the template AST via `text/template/parse` — the
+instead of .issue.title? Inside {{ range }}, the dot refers to the current element, not
+the root data."` This requires parsing the template AST via `text/template/parse` — the
   tree is available after `template.Parse()` and can be walked to detect `FieldNode`
   references to known top-level names within `RangeNode` subtrees. The prompt template
   documentation must also include a labeled example demonstrating `$` access inside
