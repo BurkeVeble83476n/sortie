@@ -51,8 +51,8 @@ differences:
 
 - **Go instead of Elixir** for deployment simplicity and broader contributor accessibility.
 - **SQLite persistence** instead of in-memory state, surviving process restarts.
-- **Pluggable trackers and agents** instead of Linear-only and Codex-only integration.
-- **Claude Code as primary agent** instead of Codex app-server.
+- **Pluggable trackers and agents** via adapter interfaces, instead of hardcoded Linear and Codex integration.
+- **Claude Code as first agent adapter**, with the interface designed for any runtime (Codex, Copilot, HTTP-based agents).
 
 ## License
 

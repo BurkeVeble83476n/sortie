@@ -96,7 +96,7 @@ Important boundary:
    - Creates workspace.
    - Builds prompt from issue + workflow template.
    - Launches the coding agent session via the configured agent adapter.
-   - Streams agent updates back to the orchestrator.
+   - Relays agent updates back to the orchestrator.
 
 7. `Persistence Layer`
    - SQLite database for retry queues, session metadata, workspace registry, token accounting, and
@@ -475,13 +475,13 @@ Fields:
   - State keys are normalized (`lowercase`) for lookup.
   - Invalid entries (non-positive or non-numeric) are ignored.
 
-Adapter-specific pass-through config (example: Codex):
+Adapter-specific pass-through config:
 
-For Codex-specific fields such as `approval_policy`, `thread_sandbox`, and `turn_sandbox_policy`,
-place them in a `codex` sub-object inside `agent`. These are pass-through values interpreted by
-the Codex adapter and are not interpreted by the orchestrator core. To inspect the installed Codex
-schema, run `codex app-server generate-json-schema --out <dir>` and inspect the relevant
-definitions referenced by `v2/ThreadStartParams.json` and `v2/TurnStartParams.json`.
+Each adapter may define its own configuration fields in a sub-object named after its `kind`
+value. These are pass-through values interpreted by the adapter and not by the orchestrator
+core. For example, a Codex adapter may accept `codex.approval_policy` and
+`codex.thread_sandbox`; a Claude Code adapter may accept `claude-code.permission_mode`.
+The orchestrator forwards the entire sub-object to the adapter without validation.
 
 ### 5.4 Prompt Template Contract
 
@@ -974,7 +974,8 @@ An agent adapter must implement the following operations:
   - Returns an opaque session handle.
 - `RunTurn(session, prompt, issue, on_event) -> TurnResult`
   - Execute one agent turn with the given prompt.
-  - Streams events to the orchestrator via `on_event` callback.
+  - Delivers events to the orchestrator via `on_event` callback (push adapters) or returns
+    them in the result (synchronous adapters).
   - Returns when the turn completes (success, failure, or timeout).
 - `StopSession(session)`
   - Terminate the agent process/service cleanly.
@@ -1103,14 +1104,17 @@ Behavior:
 1. Create/reuse workspace for issue.
 2. Build prompt from workflow template.
 3. Start agent session via adapter.
-4. Forward agent events to orchestrator.
+4. Relay agent events to orchestrator.
 5. On any error, fail the worker attempt (the orchestrator will retry).
 
 Note:
 
 - Workspaces are intentionally preserved after successful runs.
 
-### 10.7 Launch Contract
+### 10.7 Local Subprocess Launch Contract
+
+This subsection applies only to adapters that launch a local subprocess (e.g., Claude Code,
+Codex). HTTP-based and remote adapters define their own connection semantics.
 
 When `agent.kind` requires a local subprocess:
 
@@ -2082,8 +2086,8 @@ Use the same validation profiles as Section 17:
   session using configured Sortie auth, scoped to the configured project.
 - Make observability settings configurable in workflow front matter without prescribing UI
   implementation details.
-- First-class tracker write APIs (comments/state transitions) in the orchestrator instead of only
-  via agent tools.
+- First-class tracker write APIs (comments/state transitions) in the orchestrator, supplementing
+  agent tool-based mutations.
 
 ### 18.3 Operational Validation Before Production (Recommended)
 

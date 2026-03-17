@@ -39,9 +39,10 @@ its respective interface. Issue and event data is normalized into common types a
 adapter boundary.
 
 The initial implementation targets Jira as the primary tracker and Claude Code as the
-primary agent runtime. The agent adapter communicates over stdio, allowing straightforward
-substitution of alternative runtimes (Codex, Copilot, or any agent exposing a compatible
-CLI interface) without changes to orchestration logic.
+primary agent runtime. The adapter contract is transport-agnostic: the Claude Code adapter
+communicates over stdio, but other adapters may use HTTP, gRPC, or any other protocol.
+Adding a new tracker or agent runtime requires implementing the corresponding interface
+in a new package — no changes to orchestration logic.
 
 Linear support and additional agent adapters are planned as subsequent implementations.
 
