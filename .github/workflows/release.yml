@@ -49,6 +49,15 @@ jobs:
           fi
           echo "✓ Tag ${TAG} is available"
 
+      - name: Verify CHANGELOG.md contains release version
+        run: |
+          VERSION='${{ inputs.version }}'
+          if ! grep -qP "^## \[${VERSION}\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for version ${VERSION}. Add a '## [${VERSION}] - YYYY-MM-DD' section before releasing."
+            exit 1
+          fi
+          echo "✓ CHANGELOG.md contains [${VERSION}]"
+
   lint:
     name: Lint
     needs: [validate]
