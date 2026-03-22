@@ -3,11 +3,9 @@
 [![CI](https://github.com/sortie-ai/sortie/actions/workflows/ci.yml/badge.svg)](https://github.com/sortie-ai/sortie/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/sortie-ai/sortie/graph/badge.svg?token=K2TPXBCbvb)](https://codecov.io/gh/sortie-ai/sortie)
 
-Sortie is an orchestration service that turns issue tracker tickets into autonomous coding
-agent sessions. It polls for work, creates isolated per-issue workspaces, dispatches agents,
-and manages their lifecycle through retries, reconciliation, and observability.
-
+Sortie turns issue tracker tickets into autonomous coding agent sessions.
 Engineers manage work at the ticket level. Agents handle implementation.
+Single binary, zero dependencies, SQLite persistence.
 
 > Sortie is in active development. Core components (tracker adapters, agent adapters, workspace management) are implemented. The orchestrator integration is in progress. See [TODO.md](TODO.md) for current status.
 
@@ -79,7 +77,8 @@ all hooks, continuation guidance, and blocker handling.
 Sortie is a single Go binary. It uses SQLite for persistent state (retry queues, session
 metadata, run history) and communicates with coding agents over stdio. The orchestrator
 is the single authority for all scheduling decisions; there is no external job queue or
-distributed coordination. For full architectural details, see [docs/architecture.md](docs/architecture.md).
+distributed coordination. For full architectural details, see
+[docs/architecture.md](docs/architecture.md).
 
 Issue trackers and coding agents are integrated through adapter interfaces. Adding support
 for a new tracker or agent is an additive change: implement the interface in a new package.
@@ -90,13 +89,10 @@ The initial implementation targets Jira and Claude Code. See
 ## Prior Art
 
 Sortie's architecture is informed by [OpenAI Symphony](https://github.com/openai/symphony),
-a spec-first orchestration framework with an Elixir reference implementation. Key
-differences:
-
-- **Go instead of Elixir** for deployment simplicity and broader contributor accessibility.
-- **SQLite persistence** instead of in-memory state, surviving process restarts.
-- **Pluggable trackers and agents** via adapter interfaces, instead of hardcoded Linear and Codex integration.
-- **Claude Code as first agent adapter**, with the interface designed for any runtime (Codex, Copilot, HTTP-based agents).
+a spec-first orchestration framework with an Elixir reference implementation. Sortie diverges
+in language (Go for deployment simplicity), persistence (SQLite instead of in-memory state),
+and extensibility (pluggable adapters for any tracker or agent, not hardcoded to Linear
+and Codex).
 
 ## Why "Sortie"
 
