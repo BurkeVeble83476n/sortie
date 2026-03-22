@@ -9,29 +9,70 @@ and manages their lifecycle through retries, reconciliation, and observability.
 
 Engineers manage work at the ticket level. Agents handle implementation.
 
-> **Note:** Sortie is under active development and is not yet ready for use.
+> Sortie is in active development. Core components (tracker adapters, agent adapters, workspace management) are implemented. The orchestrator integration is in progress. See [TODO.md](TODO.md) for current status.
 
-## Why "Sortie"
+## The Problem
 
-A _sortie_ is a military and aviation term for a single mission executed autonomously. The
-metaphor is precise: the orchestrator dispatches agents on missions (issues), each with an
-isolated workspace, a defined objective, and an expected return. The name is short, two
-syllables, pronounceable across languages, and does not conflict with existing projects in
-this domain.
+Coding agents can handle routine engineering tasks: bug fixes,
+dependency updates, test coverage, build features. But running
+them at scale requires infrastructure that doesn't exist yet:
+isolated workspaces, retry logic, state reconciliation, tracker
+integration, cost tracking. Teams build this ad-hoc, poorly,
+and differently each time.
+
+Sortie is that infrastructure.
 
 ## How It Works
 
-1. Polls an issue tracker for tickets in active states.
-2. Creates an isolated workspace for each ticket.
-3. Renders a prompt from the ticket data and a workflow template.
-4. Launches a coding agent session inside the workspace.
-5. Monitors execution: stall detection, timeout enforcement, state reconciliation.
-6. Retries failed runs with exponential backoff.
-7. Cleans up workspaces when tickets reach terminal states.
+Define your `WORKFLOW.md` in a single file alongside the target repository:
 
-The workflow definition (prompt template and runtime configuration) lives in a single
-`WORKFLOW.md` file that is version-controlled alongside the target repository. Changes
-to the workflow are detected and applied without restart.
+```markdown
+---
+tracker:
+  kind: jira
+  project: PLATFORM
+  query_filter: "component = 'billing-api' AND labels = 'agent-ready'"
+  active_states: [To Do, In Progress]
+  terminal_states: [Done, Won't Do]
+
+agent:
+  kind: claude-code
+  max_concurrent_agents: 4
+  max_concurrent_agents_by_state:
+    in progress: 3
+    to do: 1
+
+hooks:
+  after_create: |
+    git clone git@github.com:acme/billing-api.git .
+    go mod download
+  before_run: |
+    git checkout -B "sortie/$SORTIE_ISSUE_IDENTIFIER" origin/main
+  after_run: |
+    git add -A && git diff --cached --quiet || \
+      git commit -m "sortie($SORTIE_ISSUE_IDENTIFIER): automated changes"
+---
+
+You are a senior Go engineer working on the billing-api service.
+
+## {{ .issue.identifier }}: {{ .issue.title }}
+
+{{ .issue.description }}
+
+{{ if .attempt }}
+This is retry attempt {{ .attempt }}. Check the workspace for partial work
+from the previous run. Do not start from scratch.
+{{ end }}
+```
+
+Sortie watches this file, polls Jira for matching issues, creates an isolated
+workspace for each, and launches Claude Code with the rendered prompt. It handles
+the rest: stall detection, timeout enforcement, retries with backoff, state
+reconciliation with the tracker, and workspace cleanup when issues reach terminal
+states. Changes to the workflow are applied without restart.
+
+See [examples/WORKFLOW.md](examples/WORKFLOW.md) for a complete example with
+all hooks, continuation guidance, and blocker handling.
 
 ## Architecture
 
@@ -56,6 +97,14 @@ differences:
 - **SQLite persistence** instead of in-memory state, surviving process restarts.
 - **Pluggable trackers and agents** via adapter interfaces, instead of hardcoded Linear and Codex integration.
 - **Claude Code as first agent adapter**, with the interface designed for any runtime (Codex, Copilot, HTTP-based agents).
+
+## Why "Sortie"
+
+A _sortie_ is a military and aviation term for a single mission executed autonomously. The
+metaphor is precise: the orchestrator dispatches agents on missions (issues), each with an
+isolated workspace, a defined objective, and an expected return. The name is short, two
+syllables, pronounceable across languages, and does not conflict with existing projects in
+this domain.
 
 ## License
 
