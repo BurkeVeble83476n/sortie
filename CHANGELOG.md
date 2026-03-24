@@ -9,6 +9,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.7] - 2026-03-24
+
+### Added
+
+- Graceful shutdown: on SIGTERM/SIGINT the orchestrator now drains running
+  workers (up to 30 s), persists final state to SQLite, flushes pending
+  agent events, and cancels retry timers before exiting.
+- Issue handoff via `tracker.handoff_state` config field — when an agent
+  session completes normally and the issue is still in an active state, the
+  orchestrator transitions it to the configured handoff state (e.g.,
+  "In Review") and skips the continuation retry.
+- `TransitionIssue` operation on the `TrackerAdapter` interface — Jira
+  adapter uses the workflow transitions API; file adapter uses an in-memory
+  override map.
+- Per-issue effort budget via `agent.max_sessions` — limits total agent
+  sessions dispatched per issue before releasing the claim. Default 0
+  (unlimited).
+- Documentation site at https://docs.sortie-ai.com/ with initial
+  configuration reference.
+
+### Fixed
+
+- Orchestrator: continuation retry attempt counter now increments correctly
+  across sessions instead of resetting to 1 on every normal exit.
+- CLI: orchestrator-only fields (`max_turns`, `max_concurrent_agents`,
+  `max_retry_backoff_ms`, `max_concurrent_agents_by_state`) removed from
+  the adapter config map, fixing silent shadowing of adapter extension keys
+  such as `claude-code.max_turns`.
+- Jira adapter: `extractStringSlice` now handles `[]string` from the config
+  layer — previously only `[]any` was handled, silently reverting to default
+  states and causing configured `active_states` / `terminal_states` to be
+  ignored.
+- Jira adapter: `FetchIssueStatesByIDs` now queries by numeric `id` instead
+  of `key`, and results are keyed by issue ID, fixing reconciliation failures
+  where state changes on running issues were never detected.
+- Jira adapter: non-numeric IDs are now rejected instead of silently mangled,
+  and empty ID lists no longer produce invalid `id IN ()` JQL.
+- File and Jira adapters now return `ErrTrackerNotFound` for missing issues
+  in `FetchIssueByID` and `FetchIssueComments`.
+- Orchestrator: INFO-level tick summary log after each dispatch cycle with
+  candidate, dispatched, running, and retrying counters to distinguish normal
+  operation from a stall.
+
 ## [0.0.6] - 2026-03-23
 
 ### Added
@@ -152,7 +195,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   execution via GitHub Actions.
 - Architecture Decision Records (ADR-0001 through ADR-0005).
 
-[Unreleased]: https://github.com/sortie-ai/sortie/compare/0.0.6...HEAD
+[Unreleased]: https://github.com/sortie-ai/sortie/compare/0.0.7...HEAD
+[0.0.7]: https://github.com/sortie-ai/sortie/compare/0.0.6...0.0.7
 [0.0.6]: https://github.com/sortie-ai/sortie/compare/0.0.5...0.0.6
 [0.0.5]: https://github.com/sortie-ai/sortie/compare/0.0.4...0.0.5
 [0.0.4]: https://github.com/sortie-ai/sortie/compare/0.0.3...0.0.4
