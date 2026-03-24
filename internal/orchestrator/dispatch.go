@@ -302,5 +302,9 @@ func DispatchIssue(ctx context.Context, state *State, issue domain.Issue, attemp
 
 	CancelRetry(state, issue.ID)
 
-	go workerFn(workerCtx, issue, attemptCopy)
+	state.WorkerWg.Add(1)
+	go func() {
+		defer state.WorkerWg.Done()
+		workerFn(workerCtx, issue, attemptCopy)
+	}()
 }

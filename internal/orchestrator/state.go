@@ -5,6 +5,7 @@ package orchestrator
 import (
 	"context"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sortie-ai/sortie/internal/domain"
@@ -158,8 +159,15 @@ type RetryEntry struct {
 // agent_totals and completed set are backed by SQLite and survive restarts.
 //
 // State is not safe for concurrent access. All mutations are serialized
-// through the orchestrator's event loop goroutine.
+// through the orchestrator's event loop goroutine. The exception is
+// WorkerWg, which is inherently goroutine-safe.
 type State struct {
+	// WorkerWg tracks in-flight worker goroutines spawned by
+	// [DispatchIssue]. Callers that invoke dispatch outside the Run()
+	// event loop (e.g. direct handleTick calls) can Wait() on this
+	// group to ensure all goroutines have completed before cleanup.
+	WorkerWg sync.WaitGroup
+
 	// PollIntervalMS is the current effective poll interval from config.
 	PollIntervalMS int
 

@@ -1024,6 +1024,7 @@ func TestTickLogging_WithDispatches(t *testing.T) {
 	})
 
 	o.handleTick(context.Background())
+	o.state.WorkerWg.Wait()
 
 	got := lb.String()
 	if !strings.Contains(got, "tick completed") {
@@ -1611,6 +1612,15 @@ func TestOrchestratorDynamicConfigReload(t *testing.T) {
 		cfg.Agent.MaxTurns = 1
 		tmpl := mustParseTemplate(t, "do {{ .issue.identifier }}")
 
+		// newTestState allocated below; deferred WaitGroup ensures all
+		// dispatched goroutines finish before t.TempDir() cleanup.
+		var stateRef *State
+		t.Cleanup(func() {
+			if stateRef != nil {
+				stateRef.WorkerWg.Wait()
+			}
+		})
+
 		issues := []domain.Issue{
 			{ID: "c-1", Identifier: "C-1", Title: "First", State: "To Do"},
 			{ID: "c-2", Identifier: "C-2", Title: "Second", State: "To Do"},
@@ -1635,6 +1645,7 @@ func TestOrchestratorDynamicConfigReload(t *testing.T) {
 		wm := &stubWorkflowManager{config: cfg, template: tmpl}
 		regs := passingPreflightRegistries()
 		state := NewState(cfg.Polling.IntervalMS, 1, nil, AgentTotals{})
+		stateRef = state
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -1710,6 +1721,13 @@ func TestOrchestratorDynamicConfigReload(t *testing.T) {
 		cfg.Tracker.ActiveStates = []string{"To Do"}
 		cfg.Tracker.TerminalStates = []string{"Done"}
 
+		var stateRef *State
+		t.Cleanup(func() {
+			if stateRef != nil {
+				stateRef.WorkerWg.Wait()
+			}
+		})
+
 		qaIssue := domain.Issue{
 			ID: "qa-1", Identifier: "QA-1", Title: "Review", State: "QA Review",
 		}
@@ -1732,6 +1750,7 @@ func TestOrchestratorDynamicConfigReload(t *testing.T) {
 		wm := &stubWorkflowManager{config: cfg, template: tmpl}
 		regs := passingPreflightRegistries()
 		state := NewState(cfg.Polling.IntervalMS, cfg.Agent.MaxConcurrentAgents, nil, AgentTotals{})
+		stateRef = state
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -2053,6 +2072,8 @@ func TestOrchestratorDynamicConfigReload(t *testing.T) {
 		wm := &stubWorkflowManager{config: cfg, template: tmpl}
 		regs := passingPreflightRegistries()
 		state := NewState(cfg.Polling.IntervalMS, cfg.Agent.MaxConcurrentAgents, nil, AgentTotals{})
+
+		t.Cleanup(func() { state.WorkerWg.Wait() })
 
 		o := NewOrchestrator(OrchestratorParams{
 			State:           state,
