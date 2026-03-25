@@ -6,7 +6,8 @@
 #
 # Environment:
 #   SORTIE_VERSION      Pin a specific release tag (e.g. v1.0.0 or 0.0.7).
-#   SORTIE_INSTALL_DIR  Override install directory  (default: ~/.local/bin).
+#   SORTIE_INSTALL_DIR  Override install directory
+#                       (default: /usr/local/bin as root, ~/.local/bin otherwise).
 #   SORTIE_NO_VERIFY    Set to 1 to skip checksum verification.
 
 set -eu
@@ -99,6 +100,34 @@ verify_checksum() {
         || die "checksum mismatch (expected ${_want}, got ${_got})"
 }
 
+# ── Install directory resolution ──────────────────────────────────────────────
+
+resolve_install_dir() {
+    if [ -n "${SORTIE_INSTALL_DIR-}" ]; then
+        printf '%s' "$SORTIE_INSTALL_DIR"
+        return
+    fi
+
+    # Root (e.g. Docker) → /usr/local/bin, the FHS standard for local binaries.
+    if [ "$(id -u)" -eq 0 ]; then
+        printf '%s' "/usr/local/bin"
+        return
+    fi
+
+    # Non-root → ~/.local/bin (XDG convention, same as pip, mise, pipx).
+    printf '%s' "${HOME}/.local/bin"
+}
+
+# Detect rc file for the current shell so PATH hint is copy-pasteable.
+shell_rc() {
+    case "${SHELL-}" in
+        */zsh)  printf '%s' "${ZDOTDIR:-$HOME}/.zshrc"  ;;
+        */bash) printf '%s' "${HOME}/.bashrc"            ;;
+        */fish) printf '%s' "${HOME}/.config/fish/config.fish" ;;
+        *)      printf '%s' "${HOME}/.profile"           ;;
+    esac
+}
+
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
 cleanup() { [ -d "${TMPDIR_INSTALL-}" ] && rm -rf "$TMPDIR_INSTALL"; }
@@ -138,7 +167,7 @@ main() {
 
     tar -xzf "${TMPDIR_INSTALL}/${_archive}" -C "${TMPDIR_INSTALL}"
 
-    _dir="${SORTIE_INSTALL_DIR:-${HOME}/.local/bin}"
+    _dir=$(resolve_install_dir)
     mkdir -p "$_dir"
     install -m 755 "${TMPDIR_INSTALL}/${BIN}" "${_dir}/${BIN}"
 
@@ -147,10 +176,12 @@ main() {
     case ":${PATH}:" in
         *":${_dir}:"*) ;;
         *)
+            _rc=$(shell_rc)
             printf '\n'
             info "Add to your PATH to get started:"
             # shellcheck disable=SC2016
-            printf '  %bexport PATH="%s:$PATH"%b\n\n' "${DIM}" "$_dir" "${RESET}"
+            printf '  %becho '\''export PATH="%s:$PATH"'\'' >> %s%b\n\n' \
+                "${DIM}" "$_dir" "$_rc" "${RESET}"
             ;;
     esac
 
