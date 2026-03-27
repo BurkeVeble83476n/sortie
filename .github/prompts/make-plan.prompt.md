@@ -7,7 +7,7 @@ agent: Planner
 
 Analyze the provided specification section-by-section and create an atomic, layer-aware implementation plan.
 
-Before planning, read the relevant sections of [architecture.md](../../docs/architecture.md) and review [TODO.md](../../TODO.md) to ensure the plan respects milestone ordering and dependencies.
+Before planning, read the relevant sections of [architecture.md](../../docs/architecture.md) to ensure the plan respects milestone ordering and dependencies.
 
 Follow your planning process and output format rules strictly.
 
