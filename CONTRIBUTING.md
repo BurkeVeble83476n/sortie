@@ -1,211 +1,170 @@
 # Contributing to Sortie
 
-Sortie is built spec-first: the architecture document defines every behavior, and the
-implementation conforms to it. Contributions that improve conformance, coverage, and
-reliability are welcome. This guide explains how to work within that model.
+Sortie turns issue tracker tickets into autonomous coding agent sessions — a single Go
+binary that orchestrates workspaces, retries, and state reconciliation for AI coding
+agents. The full picture is in the [README](README.md).
 
-## What we accept
+The project follows a spec-first model: [docs/architecture.md](docs/architecture.md)
+defines every entity, state machine, and validation rule. The implementation conforms to
+it. This matters because if you are fixing a bug in the orchestrator, the architecture
+doc tells you what the correct behavior *is*. You do not need to reverse-engineer intent
+from the code.
 
-**Always welcome:**
+## Finding something to work on
 
-- Bug fixes with a regression test
-- Test coverage for uncovered paths
-- Implementations of tasks listed in [TODO.md](TODO.md), in milestone order
-- New adapter packages behind existing interfaces (additive only)
-- Documentation fixes
+Browse [open issues](https://github.com/sortie-ai/sortie/issues) and look for the
+labels `good first issue` and `help wanted`. These are curated for newcomers and do not
+require deep familiarity with the codebase.
 
-**Discuss first** (open an issue before writing code):
-
-- Changes to [docs/architecture.md](docs/architecture.md) or accepted ADRs
-- Features not yet in `TODO.md`
-- New dependencies beyond what the architecture specifies
-- Reordering or skipping `TODO.md` milestones
-
-**Will not be accepted:**
-
-- CGo or any dependency requiring a C toolchain
-- Changes that break the single-binary, zero-dependency deployment model
-- Adapter-specific logic in core packages (`internal/orchestrator/`, `internal/domain/`)
-- Weakened workspace path containment or input sanitization
-- Implementations that contradict `docs/architecture.md` -- drift from the spec is a bug
-
-## Prerequisites
-
-- **Go** -- version matching [go.mod](go.mod) (currently 1.26.1), managed via
-  [asdf](https://asdf-vm.com/) or installed directly. Do not override `GOPATH` or `GOMODCACHE`.
-- **golangci-lint** -- installed separately; `make lint` invokes it.
-- **SQLite library** -- `modernc.org/sqlite` only. Never `mattn/go-sqlite3`.
-- No C compiler needed. The entire dependency tree is pure Go.
-
-## Build and test
-
-All operations go through the Makefile. Do not invoke `go` subcommands directly.
+If nothing catches your eye, test coverage and documentation fixes are always useful and
+require no prior discussion:
 
 ```bash
-make build                                 # compile to ./sortie
-make test                                  # all tests, -race enabled
-make test PKG=./internal/persistence       # single package
-make test RUN=TestOpenStore                # single test
-make lint                                  # golangci-lint
-make fmt                                   # gofmt + goimports
+# Find packages with low coverage
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out | grep -v '100.0%' | sort -k3 -n
 ```
 
-Tests run with the race detector on every invocation. If `make test` passes, the change
-is safe to submit.
+For larger work — new features, new adapters, architectural changes — open an issue
+first to discuss the approach.
+
+## Setup
+
+**Requirements:** Go 1.26.1 (see [go.mod](go.mod)), golangci-lint.
+
+```bash
+git clone https://github.com/sortie-ai/sortie.git
+cd sortie
+make test    # runs all tests with -race
+make build   # compiles to ./sortie
+make lint    # golangci-lint
+make fmt     # gofmt + goimports
+```
+
+All commands go through the Makefile. If `make test` passes, the change is safe to
+submit.
+
+The SQLite dependency is [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) —
+a pure-Go driver. No C compiler needed.
 
 ### Integration tests
 
-Integration tests talk to real services and are gated by environment variables. Without
-the variables, they skip cleanly and never fail CI.
+Integration tests are gated by environment variables and skip cleanly without them:
 
 ```bash
-SORTIE_JIRA_TEST=1 \
-  SORTIE_JIRA_ENDPOINT="..." \
-  SORTIE_JIRA_API_KEY="..." \
-  SORTIE_JIRA_PROJECT="..." \
+SORTIE_JIRA_TEST=1 SORTIE_JIRA_ENDPOINT="..." SORTIE_JIRA_API_KEY="..." \
   make test PKG=./internal/tracker/jira/...
 
 SORTIE_CLAUDE_TEST=1 ANTHROPIC_API_KEY="sk-..." \
-    make test PKG=./internal/agent/claude/...
+  make test PKG=./internal/agent/claude/...
 ```
+
+You do not need access to Jira or Claude to contribute. The unit test suite covers the
+vast majority of the codebase.
+
+## Making a change
+
+**Small changes** (docs, typos, test coverage, bug fixes in a single package): fork,
+fix, test, submit a PR. No ceremony needed.
+
+**Medium changes** (multi-file bug fixes, new test scenarios, adapter improvements):
+read the relevant section of [docs/architecture.md](docs/architecture.md) before
+implementing. The spec defines what correct behavior looks like, so reading it first
+prevents wasted effort.
+
+**Large changes** (new features, new adapters, orchestrator changes): open an issue to
+discuss the design before writing code. The architecture doc is the source of truth —
+changes that contradict it will not be merged. If you believe the spec itself should
+change, that is a valid conversation to have in an issue.
 
 ## Project layout
 
-```plaintext
-cmd/sortie/            -- entry point, CLI wiring
+```
+cmd/sortie/            entry point, CLI wiring
 internal/
-  agent/               -- agent adapters (claude-code, mock)
-  config/              -- typed config, defaults, env var resolution, validation
-  domain/              -- pure types, interfaces, constants (imports nothing internal)
-  logging/             -- structured slog helpers (imports nothing internal)
-  orchestrator/        -- dispatch, retry, reconciliation, state machine
-  persistence/         -- SQLite store: migrations, retry queues, run history
-  prompt/              -- template rendering (text/template, strict mode)
-  registry/            -- adapter registration
-  server/              -- HTTP API and dashboard
-  tracker/             -- tracker adapters (jira, file)
-  workflow/            -- WORKFLOW.md loader, file watcher
-  workspace/           -- workspace creation, path safety, hook execution
+  agent/               agent adapters (claude/, mock/)
+  config/              typed config, defaults, env-var resolution
+  domain/              pure types, interfaces, error categories (imports nothing)
+  logging/             structured slog helpers (imports nothing)
+  orchestrator/        dispatch, retry, reconciliation, state machine
+  persistence/         SQLite store, migrations, retry queues
+  prompt/              text/template rendering, strict mode
+  registry/            adapter registration
+  server/              HTTP API, dashboard, metrics
+  tool/                client-side tool framework (trackerapi/)
+  tracker/             tracker adapters (jira/, file/)
+  workflow/            WORKFLOW.md parser, file watcher
+  workspace/           filesystem isolation, path safety, hook execution
 docs/
-  architecture.md      -- the specification
-  decisions/           -- accepted ADRs
+  architecture.md      the specification (~2100 lines)
+  decisions/           Architecture Decision Records (ADRs)
 ```
 
-The `internal/` directory enforces encapsulation at the compiler level. Each sub-package
-maps to one architectural component. Imports flow strictly downward; `domain/` and
-`logging/` sit at the bottom with no internal dependencies.
+Imports flow downward. `domain/` and `logging/` sit at the bottom with no internal
+dependencies. Adapters (`tracker/*`, `agent/*`) implement interfaces defined in
+`domain/` and never import each other or the orchestrator.
 
-## The spec-first contribution loop
+## Code conventions
 
-Every change follows the same sequence:
+The linter config in [.golangci.yml](.golangci.yml) catches most issues. Beyond what the
+linter enforces:
 
-1. **Read the spec.** Open the relevant section of `docs/architecture.md`. If touching
-   the orchestrator, read Sections 7-8 and 16. For adapters, Sections 10-13. For
-   workspace safety, Section 9.5. For persistence, Section 14.
+- **Naming:** core packages use generic names (`agent_*`, `tracker_*`, `session_*`).
+  Adapter-specific names (`jira_*`, `claude_*`) belong only inside their adapter package.
+- **Errors:** wrap with context (`fmt.Errorf("operation: %w", err)`), no capitals, no
+  trailing punctuation. Use the error categories in `internal/domain/errors.go`.
+- **Logging:** `log/slog` with typed `slog.Attr` constructors. Derive loggers via
+  `logging.WithIssue` and `logging.WithSession`.
+- **Templates:** `Option("missingkey=error")` on every `text/template` — strict mode is
+  mandatory.
 
-2. **Check TODO.md.** Milestones are ordered by dependency. Verify the task you are
-   implementing does not depend on incomplete earlier work.
-
-3. **Implement to match the spec.** Do not invent behavior. If the spec is ambiguous,
-   clarify it before writing code.
-
-4. **Write tests that verify spec behavior.** Cover both happy paths and the error
-   conditions the spec defines. Use `make test` to confirm.
-
-5. **Submit a PR.** Reference the TODO.md task and the architecture section your change
-   implements.
-
-## Code style
-
-The linter configuration in [.golangci.yml](.golangci.yml) is the style authority.
-Beyond what the linter enforces:
-
-- **Generic naming in core.** Use `agent_*`, `tracker_*`, `session_*` in orchestrator
-  and domain packages. Adapter-specific terms (`jira_*`, `claude_*`) belong only in
-  their adapter package.
-- **American English** in identifiers, comments, and error messages: `initialize`,
-  `normalize`, `behavior`.
-- **Structured logging** with `log/slog` only. Use typed `slog.Attr` constructors, not
-  alternating key-value pairs. Derive loggers through `logging.WithIssue` and
-  `logging.WithSession`.
-- **Error wrapping** with context: `fmt.Errorf("operation context: %w", err)`. No
-  capital letters or trailing punctuation in error messages.
-- **Template strict mode** is mandatory: `Option("missingkey=error")` on every
-  `text/template`.
-
-## Testing standards
+## Testing conventions
 
 - Table-driven tests with `t.Parallel()` at both test and subtest level.
-- `t.Helper()` as the first statement in every test helper.
+- `t.Helper()` as the first line of every test helper.
 - `t.TempDir()` for filesystem isolation, `t.Setenv()` for environment variables.
-- Error semantics via `errors.As()` / `errors.Is()`, never string matching.
-- Failure messages in the format: `FuncName(input) = got, want expected`.
-- No external assertion libraries. Use only the Go standard library for comparisons and diffs.
-- Fixtures in `testdata/` within the package directory, loaded through helpers.
-- Integration tests in `integration_test.go`, gated by `SORTIE_*_TEST=1` skip helpers.
+- Error assertions via `errors.As()` / `errors.Is()`, never string matching.
+- Failure format: `FuncName(input) = got, want expected`.
+- Standard library only — no third-party assertion frameworks.
+- Fixtures live in `testdata/` within each package.
 
-## Commit messages
+## Commits and PRs
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/). Subject
-line under 72 characters, imperative mood, no trailing period.
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 feat(orchestrator): add stall detection for running sessions
 fix(workspace): reject symlinks escaping workspace root
 test(tracker): cover pagination edge cases in Jira adapter
-refactor(config): split validation from env var resolution
-chore(deps): bump modernc.org/sqlite to v1.47.0
 ```
 
-The body explains **why**, not what. Reference GitHub issues or TODO.md tasks when
-relevant. Wrap body lines at 72 characters.
+PRs use the [template](.github/pull_request_template.md). One logical change per PR.
+CI runs `make lint` and `make test` — both must pass.
 
-## Pull requests
+## What will not be merged
 
-- One logical change per PR. Split unrelated work into separate PRs.
-- CI runs `make lint` and `make test` on every PR. Both must pass.
-- The PR description states the problem, the approach, what was tested, and what could
-  break. Do not narrate the diff.
-- Use the [PR template](.github/pull_request_template.md) -- it asks for scope, reviewer
-  entry point, and risk assessment.
+- CGo or any dependency requiring a C compiler.
+- Adapter-specific logic in core packages (`internal/orchestrator/`, `internal/domain/`).
+- Weakened workspace path containment or input sanitization — these are security
+  boundaries.
+- Behavior that contradicts [docs/architecture.md](docs/architecture.md).
 
-## Architectural boundaries
-
-These import rules are enforced by convention and code review. A violation is a blocking
-review finding.
-
-```
-cmd/sortie/            -> internal/*              (wiring only)
-internal/orchestrator/ -> domain, config, persistence, workspace, registry, prompt, workflow
-internal/workspace/    -> domain, config, persistence
-internal/persistence/  -> domain, config
-internal/tracker/*/    -> domain, registry        (no cross-adapter imports)
-internal/agent/*/      -> domain, registry        (no cross-adapter imports)
-internal/config/       -> domain
-internal/prompt/       -> domain
-internal/domain/       -> (nothing internal)
-internal/logging/      -> (nothing internal)
-```
+If you are unsure whether a change fits, open an issue. A five-minute conversation saves
+hours of work.
 
 ## AI-assisted contributions
 
-Sortie is developed with AI coding agents. If your contribution involves AI assistance:
-
-- The agent must read the relevant architecture section before implementing.
-- Do not accept generated code that invents behavior beyond the spec.
-- Include the actual `make test` and `make lint` output demonstrating the change works.
-- Review generated code for security, correctness, and spec conformance before submitting.
-
-AI-generated code is held to the same standard as human-written code. The spec is the
-source of truth regardless of who -- or what -- wrote the implementation.
+Sortie is primarily developed with AI coding agents. Contributions using AI tools are
+welcome under the same quality bar: the code must be correct, spec-conformant, tested,
+and reviewed by you before submitting. `make test` and `make lint` must pass — not just
+"the agent said it works."
 
 ## Security
 
-Workspace path containment, input sanitization, and key validation are security
-boundaries. Changes touching `internal/workspace/` receive additional scrutiny. If you
-find a vulnerability, report it privately rather than opening a public issue.
+Workspace path containment and input sanitization are security boundaries, not
+convenience features. Changes to `internal/workspace/` receive additional scrutiny. If
+you find a vulnerability, report it privately rather than opening a public issue.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the
-[Apache License 2.0](LICENSE).
+Contributions are licensed under [Apache License 2.0](LICENSE).
