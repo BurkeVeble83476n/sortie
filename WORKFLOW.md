@@ -5,13 +5,14 @@ tracker:
   api_key: $SORTIE_JIRA_API_KEY
   project: ST
   query_filter: "labels = 'agent-ready'"
-  active_states:
-    - To Do
-    - In Progress
+  active_states: [To Do, In Progress]
   in_progress_state: In Progress
   handoff_state: Human Review
-  terminal_states:
-    - Done
+  terminal_states: [Done]
+  comments:
+    on_dispatch: true
+    on_completion: true
+    on_failure: true
 
 polling:
   interval_ms: 60000
