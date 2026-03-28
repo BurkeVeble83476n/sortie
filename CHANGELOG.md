@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-03-29
 
+### Added
+
+- SPDX JSON Software Bill of Materials (SBOM) included with every release
+  archive, generated via `syft` in the GoReleaser pipeline for supply-chain
+  auditing. (#297)
+
 ## [0.0.10] - 2026-03-28
 
 ### Added
