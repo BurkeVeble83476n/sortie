@@ -9,43 +9,75 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.0.10] - 2026-03-28
+
+### Added
+
+- `sortie validate` template static analysis (#294): three advisory warning
+  classes — `WarnDotContext` (top-level key referenced inside `{{ range }}`
+  or `{{ with }}` where dot is redefined), `WarnUnknownVar` (variable not in
+  the `{issue, attempt, run}` contract), and `WarnUnknownField` (valid
+  top-level key with an unknown sub-field, including depth-4+ field chains on
+  known level-3 scalars). Warnings appear in both text and JSON output
+  without blocking dispatch or changing the exit code.
+- `sortie validate` front matter schema validation (#293): detects unknown
+  top-level keys, unknown sub-keys within known sections, type mismatches,
+  and semantic issues (non-positive `hooks.timeout_ms`, non-numeric
+  `max_concurrent_agents_by_state` entries). Field paths are included in
+  every diagnostic so operators can locate the offending key. Warnings are
+  advisory only.
+- `SORTIE_*` environment variable config overrides (#292): any workflow front
+  matter key can be overridden via a `SORTIE_`-prefixed environment variable
+  (e.g., `SORTIE_POLLING_INTERVAL_MS=5000`). Non-empty real env vars take
+  precedence over `.env` file values. Raw line content is removed from `.env`
+  parse errors and override values are excluded from debug logs to prevent
+  secret leakage.
+- Orchestrator: tracker comments posted at session lifecycle points (#284) —
+  session start, successful completion, and failure — with run duration and
+  attempt metadata. Comments fire from a detached goroutine to avoid blocking
+  the event loop.
+- Orchestrator: issues are transitioned to the configured `in_progress_state`
+  on dispatch (#281), with a no-op skip when the issue is already in the
+  target state (#283). `sortie_dispatch_transitions_total` Prometheus counter
+  tracks `success`, `error`, and `skipped` outcomes.
+
 ## [0.0.9] - 2026-03-27
 
 ### Added
 
-- `sortie validate` subcommand for one-shot workflow file validation without
-  starting the orchestrator, opening the database, or spawning a filesystem
-  watcher. Supports `--format text` (stderr diagnostics) and `--format json`
-  (structured stdout output) for CI pipelines and pre-commit hooks.
-- `--dry-run` flag for a single read-only poll cycle that validates the full
-  startup sequence (workflow load, preflight, database, adapter wiring)
-  without dispatching work or persisting state.
-- `--log-level` flag and `logging.level` workflow extension key to set the
-  minimum log severity at startup (`debug`, `info`, `warn`, `error`).
+- `sortie validate` subcommand (#264) for one-shot workflow file validation
+  without starting the orchestrator, opening the database, or spawning a
+  filesystem watcher. Supports `--format text` (stderr diagnostics) and
+  `--format json` (structured stdout output) for CI pipelines and pre-commit
+  hooks. Flag-parse errors are routed through the diagnostics emitter.
+- `--dry-run` flag (#275) for a single read-only poll cycle that validates
+  the full startup sequence (workflow load, preflight, database, adapter
+  wiring) without dispatching work or persisting state.
+- `--log-level` flag (#270) and `logging.level` workflow extension key to set
+  the minimum log severity at startup (`debug`, `info`, `warn`, `error`).
 - Dashboard: Workflow column in Active Sessions table and a new Run History
-  table showing completed session outcomes, timing, and workflow file.
+  table (#278) showing completed session outcomes, timing, and workflow file.
   SQL migration 003 adds a nullable `workflow_file` column to `run_history`.
-- Workspace root write-permission check in dispatch preflight — surfaces a
-  clear diagnostic instead of failing mid-dispatch.
-- Homebrew tap distribution via GoReleaser-managed tap repository
+- Workspace root write-permission check in dispatch preflight (#267) —
+  surfaces a clear diagnostic instead of failing mid-dispatch.
+- Homebrew tap distribution (#276) via GoReleaser-managed tap repository
   (`brew install sortie-ai/tap/sortie`).
-- Jira adapter: `User-Agent` header (`sortie/<version>`) sent on every HTTP
-  request.
+- Jira adapter: `User-Agent` header (#265) (`sortie/<version>`) sent on
+  every HTTP request.
 - Claude Code adapter: per-request `APIDurationMS` on `token_usage` events
-  for API-call-level latency visibility, clamped to a minimum of 1 ms.
+  (#261) for API-call-level latency visibility, clamped to a minimum of
+  1 ms.
 - Claude Code adapter: tool error text now included in
-  `EventToolResult.Message`.
+  `EventToolResult.Message` (#256).
 
 ### Fixed
 
 - CLI: adapters implementing `io.Closer` are now closed during graceful
-  shutdown, preventing resource leaks.
-- CLI: `sortie validate` routes flag-parse errors through the diagnostics
-  emitter and no longer prefixes the error kind redundantly.
+  shutdown (#269), preventing resource leaks.
 - Orchestrator: `TurnCount` increments on `session_started` instead of
-  session finalization, correctly reflecting in-progress turns.
+  session finalization (#262), correctly reflecting in-progress turns.
 - Claude Code adapter: tool error messages stripped of XML markup and
-  tail-truncated to prevent oversized events.
+  tail-truncated (#258) to prevent oversized events.
 
 ## [0.0.8] - 2026-03-26
 
@@ -282,7 +314,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   execution via GitHub Actions.
 - Architecture Decision Records (ADR-0001 through ADR-0005).
 
-[Unreleased]: https://github.com/sortie-ai/sortie/compare/0.0.9...HEAD
+[Unreleased]: https://github.com/sortie-ai/sortie/compare/0.0.10...HEAD
+[0.0.10]: https://github.com/sortie-ai/sortie/compare/0.0.9...0.0.10
 [0.0.9]: https://github.com/sortie-ai/sortie/compare/0.0.8...0.0.9
 [0.0.8]: https://github.com/sortie-ai/sortie/compare/0.0.7...0.0.8
 [0.0.7]: https://github.com/sortie-ai/sortie/compare/0.0.6...0.0.7
