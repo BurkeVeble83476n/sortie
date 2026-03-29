@@ -64,11 +64,14 @@ At least one criterion must be met. Do not write useless tests. Your KPI is test
 | Prompt       | `internal/prompt/`       | Unit                                      | Template rendering, strict mode, FuncMap, error handling          |
 | Registry     | `internal/registry/`     | Unit                                      | Adapter registration, duplicate detection, lookup                 |
 | Logging      | `internal/logging/`      | Unit                                      | Logger setup, context field helpers                               |
+| Maputil      | `internal/maputil/`      | Unit                                      | Sorted key iteration, generic map helpers                         |
+| Tool         | `internal/tool/trackerapi/` | Unit                                   | Interface compliance, project scoping, input validation           |
 | CLI          | `cmd/sortie/`            | Integration                               | Arg handling, flag parsing, exit codes                            |
 
 Integration tests requiring external services MUST be gated:
 
 - `SORTIE_JIRA_TEST=1` for Jira adapter integration tests
+- `SORTIE_GITHUB_TEST=1` for GitHub adapter integration tests
 - `SORTIE_CLAUDE_TEST=1` for Claude Code adapter integration tests
 
 Without these vars, integration tests must **skip cleanly** — never fail.

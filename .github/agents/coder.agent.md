@@ -129,7 +129,31 @@ You must analyze which file you are editing and apply the correct architectural 
     - ❌ **FORBIDDEN:** Direct tracker API calls (go through adapter interface). Direct agent process management (go through adapter interface). Integration-specific names in this package.
     - **Rule:** Single-writer for all state mutations. All worker outcomes reported back via channels/returns — never mutate orchestrator state from a worker goroutine.
 
-8.  **IF editing `cmd/sortie/` (CLI Entry Point):**
+8.  **IF editing `internal/server/` (HTTP API Layer):**
+    - **Context:** HTTP endpoints, JSON serialization, dashboard serving.
+    - ✅ **ALLOWED:** HTTP handler registration, JSON marshalling, reading from orchestrator.
+    - ❌ **FORBIDDEN:** Business logic. Direct database queries. Direct adapter calls.
+    - **Rule:** Thin translation layer between HTTP and orchestrator. No state of its own.
+
+9.  **IF editing `internal/prompt/` (Template Layer):**
+    - **Context:** Prompt template rendering with `text/template` in strict mode.
+    - ✅ **ALLOWED:** Template parsing, FuncMap helpers, data map construction.
+    - ❌ **FORBIDDEN:** Importing orchestrator, persistence, config, or adapter packages.
+    - **Rule:** Pure template logic. Imports `maputil` for deterministic iteration.
+
+10. **IF editing `internal/maputil/` (Utility Layer):**
+    - **Context:** Generic map helper functions shared across packages.
+    - ✅ **ALLOWED:** Pure generic functions over maps.
+    - ❌ **FORBIDDEN:** Any internal imports. Any I/O or side effects.
+    - **Rule:** Leaf package — nothing internal imports it upward.
+
+11. **IF editing `internal/tool/` (Agent Tool Layer):**
+    - **Context:** Client-side tool implementations exposed to coding agents.
+    - ✅ **ALLOWED:** Delegating to domain interfaces, input validation, JSON serialization.
+    - ❌ **FORBIDDEN:** Importing orchestrator, persistence, or adapter packages.
+    - **Rule:** Implements `domain.AgentTool`. Enforces project-level scoping.
+
+12. **IF editing `cmd/sortie/` (CLI Entry Point):**
     - **Context:** Binary entry point, flag parsing, startup validation, graceful shutdown.
     - ✅ **ALLOWED:** `flag` package, signal handling, wiring dependencies.
     - ❌ **FORBIDDEN:** Business logic. Direct database queries. Adapter-specific code.

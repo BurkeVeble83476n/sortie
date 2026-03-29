@@ -36,9 +36,11 @@ internal/persistence/  → internal/domain, config
 internal/registry/     → internal/domain                   (adapter registration — no orchestrator, no persistence)
 internal/tracker/*/    → internal/domain, registry          (no cross-adapter imports)
 internal/agent/*/      → internal/domain, registry          (no cross-adapter imports)
-internal/config/       → internal/domain                   (no orchestrator, no persistence)
-internal/prompt/       → internal/domain                   (no orchestrator, no persistence, no config)
+internal/tool/trackerapi/ → internal/domain              (agent tool implementations)
+internal/config/       → internal/domain, maputil          (no orchestrator, no persistence)
+internal/prompt/       → internal/domain, maputil          (no orchestrator, no persistence, no config)
 internal/domain/       → (nothing internal)                (pure types, interfaces, constants)
+internal/maputil/      → (nothing internal)                (generic map helpers)
 internal/logging/      → (nothing internal)                (stdlib only)
 ```
 
