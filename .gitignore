@@ -42,5 +42,6 @@ go.work.sum
 /.specs
 /.tasks
 
-# Sortie user documentation
+# Sortie user documentation and blog posts
 /website
+/blog

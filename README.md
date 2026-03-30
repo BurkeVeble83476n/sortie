@@ -3,16 +3,13 @@
 [![CI](https://github.com/sortie-ai/sortie/actions/workflows/ci.yml/badge.svg)](https://github.com/sortie-ai/sortie/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/sortie-ai/sortie/graph/badge.svg?token=K2TPXBCbvb)](https://codecov.io/gh/sortie-ai/sortie)
 
-Sortie turns issue tracker tickets into autonomous coding agent sessions.
-Engineers manage work at the ticket level. Agents handle implementation.
-Single binary, zero dependencies, SQLite persistence.
+Sortie turns issue tracker tickets into autonomous coding agent sessions. Engineers manage work at the ticket level. Agents handle implementation. Single binary, zero dependencies, SQLite persistence.
+
+Sortie assumes your coding agent already produces useful results when you run it manually. It handles scheduling, retry, isolation, and persistence around that agent — it does not improve the agent's output.
 
 ## The Problem
 
-Coding agents can handle routine engineering tasks: bug fixes, dependency updates, test
-coverage, build features. But running them at scale requires infrastructure that doesn't
-exist yet: isolated workspaces, retry logic, state reconciliation, tracker integration,
-cost tracking. Teams build this ad-hoc, poorly, and differently each time.
+Coding agents can handle routine engineering tasks — bug fixes, dependency updates, test coverage, feature work — when they have good system prompts, appropriate tool permissions, and have been tested on representative issues. But running validated agents at scale requires infrastructure that doesn't exist yet: isolated workspaces, retry logic, state reconciliation, tracker integration, cost tracking. Teams build this ad-hoc, poorly, and differently each time.
 
 Sortie is that infrastructure.
 
