@@ -7,10 +7,11 @@ applied to the **current minor release** of the latest major version, with a
 **3-month grace period** during which the previous minor continues to receive
 critical and high severity security patches.
 
-| Version   | Supported          |
-|-----------|--------------------|
-| 1.0.x     | Yes                |
-| < 1.0     | No                 |
+| Version   | Supported                        |
+|-----------|----------------------------------|
+| 1.1.x     | Yes                              |
+| 1.0.x     | Security patches until June 2026 |
+| < 1.0     | No                               |
 
 When a new minor version is released (e.g., 1.1.0), the previous minor (e.g., 1.0.x)
 enters this 3-month grace period. After the grace period ends, only the current
