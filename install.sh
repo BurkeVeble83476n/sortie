@@ -85,7 +85,7 @@ resolve_tag() {
 
 verify_checksum() {
     _file=$1 _sums=$2
-    _want=$(grep "$(basename "$_file")" "$_sums" | awk '{print $1}')
+    _want=$(awk -v f="$(basename "$_file")" '$2 == f {print $1}' "$_sums")
     [ -n "$_want" ] || die "no checksum entry for $(basename "$_file")"
 
     if command -v sha256sum >/dev/null 2>&1; then
