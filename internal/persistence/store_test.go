@@ -875,6 +875,158 @@ func TestQueryRecentRunHistory_WorkflowFileRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAppendRunHistory_TurnsCompleted(t *testing.T) {
+	t.Parallel()
+
+	s := openTestStore(t)
+	migrateOrFatal(t, s)
+	ctx := context.Background()
+
+	run := newTestRun(1)
+	run.TurnsCompleted = 7
+	got := appendOrFatal(t, s, run)
+
+	if got.TurnsCompleted != 7 {
+		t.Errorf("AppendRunHistory returned TurnsCompleted = %d, want 7", got.TurnsCompleted)
+	}
+
+	entries, err := s.QueryRunHistoryByIssue(ctx, run.IssueID)
+	if err != nil {
+		t.Fatalf("QueryRunHistoryByIssue: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if entries[0].TurnsCompleted != 7 {
+		t.Errorf("QueryRunHistoryByIssue TurnsCompleted = %d, want 7", entries[0].TurnsCompleted)
+	}
+}
+
+func TestAppendRunHistory_TurnsCompleted_Zero(t *testing.T) {
+	t.Parallel()
+
+	s := openTestStore(t)
+	migrateOrFatal(t, s)
+	ctx := context.Background()
+
+	// Zero turns (e.g. workspace prep failed immediately) must be stored and
+	// read back as 0, not as NULL or some other sentinel.
+	run := newTestRun(1)
+	run.TurnsCompleted = 0
+	appendOrFatal(t, s, run)
+
+	entries, err := s.QueryRunHistoryByIssue(ctx, run.IssueID)
+	if err != nil {
+		t.Fatalf("QueryRunHistoryByIssue: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if entries[0].TurnsCompleted != 0 {
+		t.Errorf("QueryRunHistoryByIssue TurnsCompleted = %d, want 0", entries[0].TurnsCompleted)
+	}
+}
+
+func TestQueryRecentRunHistory_TurnsCompleted(t *testing.T) {
+	t.Parallel()
+
+	s := openTestStore(t)
+	migrateOrFatal(t, s)
+	ctx := context.Background()
+
+	run := newTestRun(1)
+	run.TurnsCompleted = 12
+	appendOrFatal(t, s, run)
+
+	entries, err := s.QueryRecentRunHistory(ctx, 1, 0)
+	if err != nil {
+		t.Fatalf("QueryRecentRunHistory: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if entries[0].TurnsCompleted != 12 {
+		t.Errorf("QueryRecentRunHistory TurnsCompleted = %d, want 12", entries[0].TurnsCompleted)
+	}
+}
+
+func TestAppendRunHistory_DisplayIDRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	s := openTestStore(t)
+	migrateOrFatal(t, s)
+	ctx := context.Background()
+
+	run := newTestRun(1)
+	run.DisplayID = "owner/repo#1"
+	got := appendOrFatal(t, s, run)
+
+	if got.DisplayID != "owner/repo#1" {
+		t.Errorf("AppendRunHistory returned DisplayID = %q, want %q", got.DisplayID, "owner/repo#1")
+	}
+
+	entries, err := s.QueryRunHistoryByIssue(ctx, run.IssueID)
+	if err != nil {
+		t.Fatalf("QueryRunHistoryByIssue: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if entries[0].DisplayID != "owner/repo#1" {
+		t.Errorf("QueryRunHistoryByIssue DisplayID = %q, want %q", entries[0].DisplayID, "owner/repo#1")
+	}
+}
+
+func TestAppendRunHistory_EmptyDisplayIDRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	s := openTestStore(t)
+	migrateOrFatal(t, s)
+	ctx := context.Background()
+
+	// Jira-style run: DisplayID is empty (Identifier is self-explanatory).
+	run := newTestRun(1)
+	got := appendOrFatal(t, s, run)
+
+	if got.DisplayID != "" {
+		t.Errorf("AppendRunHistory returned DisplayID = %q, want empty string", got.DisplayID)
+	}
+
+	entries, err := s.QueryRunHistoryByIssue(ctx, run.IssueID)
+	if err != nil {
+		t.Fatalf("QueryRunHistoryByIssue: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if entries[0].DisplayID != "" {
+		t.Errorf("QueryRunHistoryByIssue DisplayID = %q, want empty string for NULL column", entries[0].DisplayID)
+	}
+}
+
+func TestQueryRecentRunHistory_DisplayIDRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	s := openTestStore(t)
+	migrateOrFatal(t, s)
+	ctx := context.Background()
+
+	run := newTestRun(1)
+	run.DisplayID = "sortie-ai/sortie#42"
+	appendOrFatal(t, s, run)
+
+	entries, err := s.QueryRecentRunHistory(ctx, 1, 0)
+	if err != nil {
+		t.Fatalf("QueryRecentRunHistory: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("got %d entries, want 1", len(entries))
+	}
+	if entries[0].DisplayID != "sortie-ai/sortie#42" {
+		t.Errorf("QueryRecentRunHistory DisplayID = %q, want %q", entries[0].DisplayID, "sortie-ai/sortie#42")
+	}
+}
+
 // --- Session Metadata Tests ---
 
 func TestUpsertSessionMetadata(t *testing.T) {
@@ -1559,6 +1711,184 @@ func TestCountRunHistoryByIssue(t *testing.T) {
 		}
 		if countB != 2 {
 			t.Errorf("CountRunHistoryByIssue(ISS-B) = %d, want 2", countB)
+		}
+	})
+}
+
+// --- QueryBudgetExhaustedIssues Tests ---
+
+func TestQueryBudgetExhaustedIssues(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty candidateIDs returns empty slice without DB query", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		result, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{}, 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("result = %v, want empty slice", result)
+		}
+	})
+
+	t.Run("candidates with no run history returns empty", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		result, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{"ISS-A", "ISS-B"}, 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("result = %v, want empty", result)
+		}
+	})
+
+	t.Run("candidate with count below maxSessions not returned", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		for i := 1; i <= 2; i++ {
+			run := newTestRun(i)
+			run.IssueID = "ISS-UNDER"
+			appendOrFatal(t, s, run)
+		}
+
+		result, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{"ISS-UNDER"}, 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("result = %v, want empty (count 2 < maxSessions 3)", result)
+		}
+	})
+
+	t.Run("candidate with count equal to maxSessions is returned", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		for i := 1; i <= 3; i++ {
+			run := newTestRun(i)
+			run.IssueID = "ISS-EXACT"
+			appendOrFatal(t, s, run)
+		}
+
+		result, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{"ISS-EXACT"}, 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 1 || result[0] != "ISS-EXACT" {
+			t.Errorf("result = %v, want [ISS-EXACT]", result)
+		}
+	})
+
+	t.Run("candidate with count exceeding maxSessions is returned", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		for i := 1; i <= 5; i++ {
+			run := newTestRun(i)
+			run.IssueID = "ISS-OVER"
+			appendOrFatal(t, s, run)
+		}
+
+		result, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{"ISS-OVER"}, 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 1 || result[0] != "ISS-OVER" {
+			t.Errorf("result = %v, want [ISS-OVER]", result)
+		}
+	})
+
+	t.Run("mixed candidates only qualifying ones returned", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		// ISS-EXHAUST: 3 runs (exhausted), ISS-OK: 2 runs (not), ISS-NONE: 0 runs.
+		for i := 1; i <= 3; i++ {
+			run := newTestRun(i)
+			run.IssueID = "ISS-EXHAUST"
+			appendOrFatal(t, s, run)
+		}
+		for i := 4; i <= 5; i++ {
+			run := newTestRun(i)
+			run.IssueID = "ISS-OK"
+			appendOrFatal(t, s, run)
+		}
+
+		result, err := s.QueryBudgetExhaustedIssues(
+			context.Background(),
+			[]string{"ISS-EXHAUST", "ISS-OK", "ISS-NONE"},
+			3,
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 1 || result[0] != "ISS-EXHAUST" {
+			t.Errorf("result = %v, want [ISS-EXHAUST]", result)
+		}
+	})
+
+	t.Run("maxSessions 1 returns candidate with one or more runs", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		run := newTestRun(1)
+		run.IssueID = "ISS-SINGLE"
+		appendOrFatal(t, s, run)
+
+		result, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{"ISS-SINGLE"}, 1)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 1 || result[0] != "ISS-SINGLE" {
+			t.Errorf("result = %v, want [ISS-SINGLE]", result)
+		}
+	})
+
+	t.Run("non-candidate issues in run_history are excluded", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		// ISS-NOTASKED has run history but is NOT in candidateIDs.
+		for i := 1; i <= 5; i++ {
+			run := newTestRun(i)
+			run.IssueID = "ISS-NOTASKED"
+			appendOrFatal(t, s, run)
+		}
+
+		result, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{"ISS-CANDIDATE"}, 3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(result) != 0 {
+			t.Errorf("result = %v, want empty (ISS-NOTASKED not in candidateIDs)", result)
+		}
+	})
+
+	t.Run("closed DB returns error", func(t *testing.T) {
+		t.Parallel()
+		s := openTestStore(t)
+		migrateOrFatal(t, s)
+
+		if err := s.db.Close(); err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+
+		_, err := s.QueryBudgetExhaustedIssues(context.Background(), []string{"ISS-A"}, 3)
+		if err == nil {
+			t.Fatal("expected error from closed DB, got nil")
 		}
 	})
 }

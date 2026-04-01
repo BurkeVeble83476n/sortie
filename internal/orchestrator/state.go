@@ -4,6 +4,7 @@ package orchestrator
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -202,6 +203,7 @@ type RunningEntry struct {
 type RetryEntry struct {
 	IssueID     string
 	Identifier  string
+	DisplayID   string
 	Attempt     int
 	DueAtMS     int64
 	Error       string
@@ -268,6 +270,14 @@ type State struct {
 	// Bookkeeping only — not used for dispatch gating.
 	Completed map[string]struct{}
 
+	// BudgetExhausted is the set of issue IDs whose run_history count
+	// has reached or exceeded the configured max_sessions budget.
+	// Rebuilt from a batch SQLite query at the start of each poll tick
+	// when max_sessions > 0. Updated inline by [HandleRetryTimer] on
+	// budget exhaustion. [ShouldDispatch] checks this set as dispatch
+	// gate Rule 4b. Cleared when max_sessions is 0.
+	BudgetExhausted map[string]struct{}
+
 	// AgentTotals holds aggregate token counts and cumulative runtime seconds
 	// across all ended sessions. Active session elapsed time is computed at
 	// snapshot time, not maintained continuously.
@@ -295,6 +305,7 @@ func NewState(pollIntervalMS, maxConcurrentAgents int, maxConcurrentByState map[
 		Claimed:              make(map[string]struct{}),
 		RetryAttempts:        make(map[string]*RetryEntry),
 		Completed:            make(map[string]struct{}),
+		BudgetExhausted:      make(map[string]struct{}),
 		AgentTotals:          totals,
 	}
 }
@@ -321,6 +332,7 @@ func RunningCountByState(running map[string]*RunningEntry, state string) int {
 type SnapshotRunningEntry struct {
 	IssueID            string                `json:"issue_id"`
 	Identifier         string                `json:"issue_identifier"`
+	DisplayID          string                `json:"display_identifier,omitempty"`
 	State              string                `json:"state"`
 	SessionID          string                `json:"session_id"`
 	TurnCount          int                   `json:"turn_count"`
@@ -347,6 +359,7 @@ type SnapshotRunningEntry struct {
 type SnapshotRetryEntry struct {
 	IssueID    string `json:"issue_id"`
 	Identifier string `json:"issue_identifier"`
+	DisplayID  string `json:"display_identifier,omitempty"`
 	Attempt    int    `json:"attempt"`
 	DueAtMS    int64  `json:"due_at_ms"`
 	Error      string `json:"error"`
@@ -366,11 +379,13 @@ type SnapshotAgentTotals struct {
 // RuntimeSnapshotResult is a point-in-time capture of the orchestrator's
 // runtime state for observability consumers. Produced by [RuntimeSnapshot].
 type RuntimeSnapshotResult struct {
-	GeneratedAt time.Time              `json:"generated_at"`
-	Running     []SnapshotRunningEntry `json:"running"`
-	Retrying    []SnapshotRetryEntry   `json:"retrying"`
-	AgentTotals SnapshotAgentTotals    `json:"agent_totals"`
-	RateLimits  map[string]any         `json:"rate_limits"`
+	GeneratedAt          time.Time              `json:"generated_at"`
+	Running              []SnapshotRunningEntry `json:"running"`
+	Retrying             []SnapshotRetryEntry   `json:"retrying"`
+	AgentTotals          SnapshotAgentTotals    `json:"agent_totals"`
+	RateLimits           map[string]any         `json:"rate_limits"`
+	BudgetExhaustedCount int                    `json:"budget_exhausted_count"`
+	BudgetExhausted      []string               `json:"budget_exhausted,omitempty"`
 }
 
 // ActiveElapsedSeconds returns the sum of wall-clock elapsed seconds
@@ -428,6 +443,7 @@ func RuntimeSnapshot(state *State, now time.Time) RuntimeSnapshotResult {
 		result.Running = append(result.Running, SnapshotRunningEntry{
 			IssueID:            entry.Issue.ID,
 			Identifier:         entry.Identifier,
+			DisplayID:          entry.Issue.DisplayID,
 			State:              entry.Issue.State,
 			SessionID:          entry.SessionID,
 			TurnCount:          entry.TurnCount,
@@ -462,6 +478,7 @@ func RuntimeSnapshot(state *State, now time.Time) RuntimeSnapshotResult {
 		result.Retrying = append(result.Retrying, SnapshotRetryEntry{
 			IssueID:    entry.IssueID,
 			Identifier: entry.Identifier,
+			DisplayID:  entry.DisplayID,
 			Attempt:    entry.Attempt,
 			DueAtMS:    entry.DueAtMS,
 			Error:      entry.Error,
@@ -474,6 +491,16 @@ func RuntimeSnapshot(state *State, now time.Time) RuntimeSnapshotResult {
 		TotalTokens:     state.AgentTotals.TotalTokens,
 		CacheReadTokens: state.AgentTotals.CacheReadTokens,
 		SecondsRunning:  state.AgentTotals.SecondsRunning + activeElapsedTotal,
+	}
+
+	result.BudgetExhaustedCount = len(state.BudgetExhausted)
+	if len(state.BudgetExhausted) > 0 {
+		ids := make([]string, 0, len(state.BudgetExhausted))
+		for id := range state.BudgetExhausted {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		result.BudgetExhausted = ids
 	}
 
 	if state.AgentRateLimits != nil {

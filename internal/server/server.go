@@ -41,13 +41,15 @@ type RunHistoryFunc func(ctx context.Context, limit int) ([]RunHistoryEntry, err
 // RunHistoryEntry is a server-layer view of a completed run attempt.
 // Decoupled from persistence types to avoid leaking internal packages.
 type RunHistoryEntry struct {
-	Identifier   string
-	Attempt      int
-	Status       string
-	WorkflowFile string
-	StartedAt    string
-	CompletedAt  string
-	Error        *string
+	Identifier     string
+	DisplayID      string
+	Attempt        int
+	Status         string
+	WorkflowFile   string
+	StartedAt      string
+	CompletedAt    string
+	Error          *string
+	TurnsCompleted int
 }
 
 // DBPingFunc checks whether the SQLite database is accessible.

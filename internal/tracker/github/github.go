@@ -4,9 +4,12 @@
 // normalized to domain types with labels lowercased, nil priority
 // (GitHub has no native priority), and label-based state derivation.
 // State is determined by scanning issue labels against configured
-// active_states and terminal_states in config order; the first match
-// wins. Comments are Markdown pass-through (no ADF conversion).
-// Registered under kind "github" via an init function.
+// active_states, terminal_states, and the optional handoff_state in
+// config order; the first label match wins. When handoff_state is
+// configured, state derivation and label removal during transitions
+// treat it as a recognized state label. Comments are Markdown
+// pass-through (no ADF conversion). Registered under kind "github"
+// via an init function.
 //
 // Unlike the Jira adapter, this adapter stores both activeStates and
 // terminalStates. Jira has native workflow states that the adapter
@@ -62,6 +65,7 @@ type GitHubAdapter struct {
 	repo           string
 	activeStates   []string
 	terminalStates []string
+	handoffState   string // normalized to lowercase; empty when not configured
 	queryFilter    string
 	metrics        domain.Metrics
 	etagCache      *etagCache
@@ -71,6 +75,8 @@ type GitHubAdapter struct {
 // Required config keys: "api_key" (personal access token or fine-grained
 // token), "project" (owner/repo format). Optional: "endpoint" (defaults
 // to https://api.github.com), "active_states", "terminal_states",
+// "handoff_state" (single state name recognized as a valid transition
+// target and state label; normalized to lowercase),
 // "query_filter", "user_agent", "etag_cache_size" (int, default 1000;
 // set to 0 to disable ETag caching).
 func NewGitHubAdapter(config map[string]any) (domain.TrackerAdapter, error) {
@@ -128,6 +134,9 @@ func NewGitHubAdapter(config map[string]any) (domain.TrackerAdapter, error) {
 		terminalStates[i] = strings.ToLower(s)
 	}
 
+	handoffRaw, _ := config["handoff_state"].(string)
+	handoffState := strings.ToLower(strings.TrimSpace(handoffRaw))
+
 	queryFilter, _ := config["query_filter"].(string)
 
 	userAgent, _ := config["user_agent"].(string)
@@ -155,6 +164,7 @@ func NewGitHubAdapter(config map[string]any) (domain.TrackerAdapter, error) {
 		repo:           parts[1],
 		activeStates:   activeStates,
 		terminalStates: terminalStates,
+		handoffState:   handoffState,
 		queryFilter:    queryFilter,
 		etagCache:      newETagCache(etagCacheSize),
 	}, nil
@@ -207,7 +217,8 @@ func (a *GitHubAdapter) fetchCandidatesViaIssues(ctx context.Context) ([]domain.
 		if isPullRequest(gi) {
 			continue
 		}
-		issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+		issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+		a.qualifyDisplayID(&issue)
 		if _, ok := activeSet[issue.State]; !ok {
 			continue
 		}
@@ -237,7 +248,8 @@ func (a *GitHubAdapter) fetchCandidatesViaIssues(ctx context.Context) ([]domain.
 			if isPullRequest(gi) {
 				continue
 			}
-			issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+			issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+			a.qualifyDisplayID(&issue)
 			if _, ok := activeSet[issue.State]; !ok {
 				continue
 			}
@@ -298,7 +310,8 @@ func (a *GitHubAdapter) fetchCandidatesViaSearch(ctx context.Context) ([]domain.
 		if isPullRequest(gi) {
 			continue
 		}
-		issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+		issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+		a.qualifyDisplayID(&issue)
 		if _, ok := activeSet[issue.State]; !ok {
 			continue
 		}
@@ -328,7 +341,8 @@ func (a *GitHubAdapter) fetchCandidatesViaSearch(ctx context.Context) ([]domain.
 			if isPullRequest(gi) {
 				continue
 			}
-			issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+			issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+			a.qualifyDisplayID(&issue)
 			if _, ok := activeSet[issue.State]; !ok {
 				continue
 			}
@@ -386,7 +400,8 @@ func (a *GitHubAdapter) FetchIssueByID(ctx context.Context, issueID string) (dom
 		}
 	}
 
-	issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+	issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+	a.qualifyDisplayID(&issue)
 
 	// Step 2: Fetch blockers (dependencies/blocked_by).
 	issue.BlockedBy, err = a.fetchBlockers(ctx, issueID)
@@ -460,7 +475,7 @@ func (a *GitHubAdapter) fetchBlockers(ctx context.Context, issueID string) ([]do
 			slog.String("endpoint", path))
 	}
 
-	return normalizeBlockers(blockers, a.activeStates, a.terminalStates), nil
+	return normalizeBlockers(blockers, a.activeStates, a.terminalStates, a.handoffState), nil
 }
 
 func (a *GitHubAdapter) fetchParent(ctx context.Context, issueID string) (*domain.ParentRef, error) {
@@ -581,7 +596,8 @@ func (a *GitHubAdapter) fetchOpenIssuesByStates(ctx context.Context, stateSet ma
 		if isPullRequest(gi) {
 			continue
 		}
-		issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+		issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+		a.qualifyDisplayID(&issue)
 		if _, ok := stateSet[issue.State]; !ok {
 			continue
 		}
@@ -613,7 +629,8 @@ func (a *GitHubAdapter) fetchOpenIssuesByStates(ctx context.Context, stateSet ma
 			if isPullRequest(gi) {
 				continue
 			}
-			issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+			issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+			a.qualifyDisplayID(&issue)
 			if _, ok := stateSet[issue.State]; !ok {
 				continue
 			}
@@ -668,7 +685,8 @@ func (a *GitHubAdapter) fetchClosedIssuesByLabel(ctx context.Context, label stri
 		if isPullRequest(gi) {
 			continue
 		}
-		issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+		issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+		a.qualifyDisplayID(&issue)
 		if _, dup := seen[issue.Identifier]; dup {
 			continue
 		}
@@ -697,7 +715,8 @@ func (a *GitHubAdapter) fetchClosedIssuesByLabel(ctx context.Context, label stri
 			if isPullRequest(gi) {
 				continue
 			}
-			issue := normalizeIssue(gi, a.activeStates, a.terminalStates)
+			issue := normalizeIssue(gi, a.activeStates, a.terminalStates, a.handoffState)
+			a.qualifyDisplayID(&issue)
 			if _, dup := seen[issue.Identifier]; dup {
 				continue
 			}
@@ -782,7 +801,7 @@ func (a *GitHubAdapter) fetchStatesByNumbers(ctx context.Context, numbers []stri
 		if isPullRequest(gi) {
 			continue
 		}
-		state := extractState(gi.Labels, gi.State, a.activeStates, a.terminalStates)
+		state := extractState(gi.Labels, gi.State, a.activeStates, a.terminalStates, a.handoffState)
 
 		if responseETag != "" {
 			a.etagCache.put(path, responseETag, state)
@@ -868,11 +887,12 @@ func (a *GitHubAdapter) fetchAllComments(ctx context.Context, issueNumber string
 func (a *GitHubAdapter) TransitionIssue(ctx context.Context, issueID string, targetState string) error {
 	targetLower := strings.ToLower(targetState)
 
-	if !isActiveState(targetLower, a.activeStates) && !isTerminalState(targetLower, a.terminalStates) {
+	isHandoffTarget := a.handoffState != "" && targetLower == a.handoffState
+	if !isActiveState(targetLower, a.activeStates) && !isTerminalState(targetLower, a.terminalStates) && !isHandoffTarget {
 		a.incTrackerRequest("transition", "error")
 		return &domain.TrackerError{
 			Kind:    domain.ErrTrackerPayload,
-			Message: fmt.Sprintf("invalid target state: %q is not a configured active or terminal state", targetState),
+			Message: fmt.Sprintf("invalid target state: %q is not a configured active, terminal, or handoff state", targetState),
 		}
 	}
 
@@ -895,7 +915,7 @@ func (a *GitHubAdapter) TransitionIssue(ctx context.Context, issueID string, tar
 		}
 	}
 
-	currentLabel := findCurrentStateLabel(gi.Labels, a.activeStates, a.terminalStates)
+	currentLabel := findCurrentStateLabel(gi.Labels, a.activeStates, a.terminalStates, a.handoffState)
 	currentNative := gi.State
 
 	// Step 2: Remove old state label if present and different.

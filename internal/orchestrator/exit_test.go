@@ -756,8 +756,8 @@ func TestHandleWorkerExit_RunHistoryFields(t *testing.T) {
 	if rh.Identifier != "PROJ-42" {
 		t.Errorf("RunHistory.Identifier = %q, want %q", rh.Identifier, "PROJ-42")
 	}
-	if rh.Attempt != 2 {
-		t.Errorf("RunHistory.Attempt = %d, want 2", rh.Attempt)
+	if rh.Attempt != 3 {
+		t.Errorf("RunHistory.Attempt = %d, want 3", rh.Attempt)
 	}
 	if rh.AgentAdapter != "claude-code" {
 		t.Errorf("RunHistory.AgentAdapter = %q, want %q", rh.AgentAdapter, "claude-code")
@@ -2104,5 +2104,77 @@ func TestHandleWorkerExit_CommentSessionIDPrefersResult(t *testing.T) {
 	}
 	if strings.Contains(text, "entry-ses") {
 		t.Errorf("comment text should not contain entry.SessionID %q\ngot: %q", "entry-ses", text)
+	}
+}
+
+// --- Attempt numbering and TurnsCompleted persistence ---
+
+func TestHandleWorkerExit_FirstDispatchAttemptIsOne(t *testing.T) {
+	t.Parallel()
+
+	store := &mockExitStore{}
+	// nil RetryAttempt simulates a first-dispatch run (never retried before).
+	state := exitState(t, "FD-1", nil)
+	params := defaultExitParams(t, store)
+
+	HandleWorkerExit(state, WorkerResult{
+		IssueID:      "FD-1",
+		Identifier:   "FD-1-ident",
+		ExitKind:     WorkerExitNormal,
+		AgentAdapter: "mock",
+	}, params)
+
+	if len(store.runHistories) != 1 {
+		t.Fatalf("AppendRunHistory called %d times, want 1", len(store.runHistories))
+	}
+	if store.runHistories[0].Attempt != 1 {
+		t.Errorf("RunHistory.Attempt = %d, want 1 for first-dispatch run", store.runHistories[0].Attempt)
+	}
+}
+
+func TestHandleWorkerExit_TurnsCompletedPersisted(t *testing.T) {
+	t.Parallel()
+
+	store := &mockExitStore{}
+	state := exitState(t, "TC-1", nil)
+	params := defaultExitParams(t, store)
+
+	HandleWorkerExit(state, WorkerResult{
+		IssueID:        "TC-1",
+		Identifier:     "TC-1-ident",
+		ExitKind:       WorkerExitNormal,
+		AgentAdapter:   "mock",
+		TurnsCompleted: 5,
+	}, params)
+
+	if len(store.runHistories) != 1 {
+		t.Fatalf("AppendRunHistory called %d times, want 1", len(store.runHistories))
+	}
+	if store.runHistories[0].TurnsCompleted != 5 {
+		t.Errorf("RunHistory.TurnsCompleted = %d, want 5", store.runHistories[0].TurnsCompleted)
+	}
+}
+
+func TestHandleWorkerExit_TurnsCompletedZeroWhenNoTurnsRan(t *testing.T) {
+	t.Parallel()
+
+	store := &mockExitStore{}
+	state := exitState(t, "TC-2", nil)
+	params := defaultExitParams(t, store)
+
+	HandleWorkerExit(state, WorkerResult{
+		IssueID:      "TC-2",
+		Identifier:   "TC-2-ident",
+		ExitKind:     WorkerExitError,
+		AgentAdapter: "mock",
+		Error:        errors.New("workspace prep failed"),
+		// TurnsCompleted is zero-value — worker never reached the turn loop.
+	}, params)
+
+	if len(store.runHistories) != 1 {
+		t.Fatalf("AppendRunHistory called %d times, want 1", len(store.runHistories))
+	}
+	if store.runHistories[0].TurnsCompleted != 0 {
+		t.Errorf("RunHistory.TurnsCompleted = %d, want 0 when no turns ran", store.runHistories[0].TurnsCompleted)
 	}
 }

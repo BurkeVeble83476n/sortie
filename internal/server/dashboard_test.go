@@ -799,6 +799,7 @@ func TestMapRunHistoryEntries(t *testing.T) {
 		wantWF       string
 		wantDuration string
 		wantError    string
+		wantTurns    int
 	}{
 		{
 			name: "non-empty workflow file passed through",
@@ -813,6 +814,7 @@ func TestMapRunHistoryEntries(t *testing.T) {
 			wantWF:       "WORKFLOW.md",
 			wantDuration: "30s",
 			wantError:    "",
+			wantTurns:    0,
 		},
 		{
 			name: "empty workflow file becomes em dash",
@@ -827,6 +829,7 @@ func TestMapRunHistoryEntries(t *testing.T) {
 			wantWF:       "\u2014",
 			wantDuration: "1m 0s",
 			wantError:    "",
+			wantTurns:    0,
 		},
 		{
 			name: "non-nil error extracted",
@@ -842,6 +845,7 @@ func TestMapRunHistoryEntries(t *testing.T) {
 			wantWF:       "backend.WORKFLOW.md",
 			wantDuration: "2m 0s",
 			wantError:    "agent crashed",
+			wantTurns:    0,
 		},
 		{
 			name: "invalid RFC3339 dates produce empty duration",
@@ -856,6 +860,23 @@ func TestMapRunHistoryEntries(t *testing.T) {
 			wantWF:       "WORKFLOW.md",
 			wantDuration: "",
 			wantError:    "",
+			wantTurns:    0,
+		},
+		{
+			name: "turns completed mapped from TurnsCompleted",
+			input: RunHistoryEntry{
+				Identifier:     "MT-5",
+				Attempt:        1,
+				Status:         "succeeded",
+				WorkflowFile:   "WORKFLOW.md",
+				StartedAt:      "2026-03-24T10:00:00Z",
+				CompletedAt:    "2026-03-24T10:00:10Z",
+				TurnsCompleted: 8,
+			},
+			wantWF:       "WORKFLOW.md",
+			wantDuration: "10s",
+			wantError:    "",
+			wantTurns:    8,
 		},
 	}
 
@@ -877,6 +898,9 @@ func TestMapRunHistoryEntries(t *testing.T) {
 			}
 			if e.Error != tt.wantError {
 				t.Errorf("Error = %q, want %q", e.Error, tt.wantError)
+			}
+			if e.Turns != tt.wantTurns {
+				t.Errorf("Turns = %d, want %d", e.Turns, tt.wantTurns)
 			}
 		})
 	}
@@ -915,7 +939,7 @@ func TestHandleDashboard_RunHistory(t *testing.T) {
 	if dr.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want %d", dr.StatusCode, http.StatusOK)
 	}
-	for _, want := range []string{"MT-100", "backend.WORKFLOW.md", "Run History"} {
+	for _, want := range []string{"MT-100", "backend.WORKFLOW.md", "Run History", "Turns"} {
 		if !strings.Contains(dr.Body, want) {
 			t.Errorf("body missing %q", want)
 		}
@@ -938,5 +962,247 @@ func TestHandleDashboard_NoRunHistoryFn(t *testing.T) {
 	}
 	if strings.Contains(dr.Body, "Run History") {
 		t.Error("body contains 'Run History', want omitted when RunHistoryFn is nil")
+	}
+}
+
+func TestBuildDashboardData_DisplayID(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 24, 12, 0, 0, 0, time.UTC)
+	snap := orchestrator.RuntimeSnapshotResult{
+		GeneratedAt: now,
+		Running: []orchestrator.SnapshotRunningEntry{
+			{
+				IssueID:    "id-9",
+				Identifier: "9",
+				DisplayID:  "owner/repo#9",
+				State:      "In Progress",
+				StartedAt:  now.Add(-1 * time.Minute),
+			},
+		},
+		Retrying: []orchestrator.SnapshotRetryEntry{
+			{
+				IssueID:    "id-7",
+				Identifier: "7",
+				DisplayID:  "owner/repo#7",
+				Attempt:    1,
+				DueAtMS:    now.Add(1 * time.Minute).UnixMilli(),
+				Error:      "timeout",
+			},
+		},
+	}
+
+	data := buildDashboardData(snap, "1.0.0", now.Add(-1*time.Hour), nil, now)
+
+	if len(data.Running) != 1 {
+		t.Fatalf("len(Running) = %d, want 1", len(data.Running))
+	}
+	if data.Running[0].Identifier != "owner/repo#9" {
+		t.Errorf("Running[0].Identifier = %q, want %q", data.Running[0].Identifier, "owner/repo#9")
+	}
+	if len(data.Retrying) != 1 {
+		t.Fatalf("len(Retrying) = %d, want 1", len(data.Retrying))
+	}
+	if data.Retrying[0].Identifier != "owner/repo#7" {
+		t.Errorf("Retrying[0].Identifier = %q, want %q", data.Retrying[0].Identifier, "owner/repo#7")
+	}
+}
+
+func TestBuildDashboardData_FallsBackToIdentifier(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 24, 12, 0, 0, 0, time.UTC)
+	snap := orchestrator.RuntimeSnapshotResult{
+		GeneratedAt: now,
+		Running: []orchestrator.SnapshotRunningEntry{
+			{
+				IssueID:    "id-PROJ-42",
+				Identifier: "PROJ-42",
+				DisplayID:  "",
+				State:      "In Progress",
+				StartedAt:  now.Add(-1 * time.Minute),
+			},
+		},
+		Retrying: []orchestrator.SnapshotRetryEntry{
+			{
+				IssueID:    "id-PROJ-43",
+				Identifier: "PROJ-43",
+				DisplayID:  "",
+				Attempt:    2,
+				DueAtMS:    now.Add(30 * time.Second).UnixMilli(),
+				Error:      "no slots",
+			},
+		},
+	}
+
+	data := buildDashboardData(snap, "1.0.0", now.Add(-1*time.Hour), nil, now)
+
+	if len(data.Running) != 1 {
+		t.Fatalf("len(Running) = %d, want 1", len(data.Running))
+	}
+	if data.Running[0].Identifier != "PROJ-42" {
+		t.Errorf("Running[0].Identifier = %q, want %q", data.Running[0].Identifier, "PROJ-42")
+	}
+	if len(data.Retrying) != 1 {
+		t.Fatalf("len(Retrying) = %d, want 1", len(data.Retrying))
+	}
+	if data.Retrying[0].Identifier != "PROJ-43" {
+		t.Errorf("Retrying[0].Identifier = %q, want %q", data.Retrying[0].Identifier, "PROJ-43")
+	}
+}
+
+// TestHandleDashboard_FooterCacheReadLabel verifies that the dashboard footer uses
+// the "Cache Read:" label (not the ambiguous "Cache:") and includes a tooltip
+// explaining the metric for users unfamiliar with prompt caching.
+func TestHandleDashboard_FooterCacheReadLabel(t *testing.T) {
+	t.Parallel()
+
+	snap := orchestrator.RuntimeSnapshotResult{
+		GeneratedAt: time.Date(2026, 3, 24, 12, 0, 0, 0, time.UTC),
+		AgentTotals: orchestrator.SnapshotAgentTotals{
+			InputTokens:     734,
+			OutputTokens:    280,
+			CacheReadTokens: 2077449,
+		},
+	}
+	ts := dashboardServer(t, fixedSnapshot(snap), "1.0.0", nil)
+
+	dr := getDashboard(t, ts, "/")
+
+	if dr.StatusCode != http.StatusOK {
+		t.Fatalf("GET / status = %d, want %d", dr.StatusCode, http.StatusOK)
+	}
+
+	// The footer must use "Cache Read:" as the label.
+	if !strings.Contains(dr.Body, "Cache Read:") {
+		t.Error(`footer body missing "Cache Read:" label`)
+	}
+
+	// The span must carry the tooltip explaining the metric.
+	wantTitle := `title="Prompt cache read tokens`
+	if !strings.Contains(dr.Body, wantTitle) {
+		t.Errorf("footer body missing tooltip attribute %q", wantTitle)
+	}
+
+	// The cache read token value must appear formatted.
+	if !strings.Contains(dr.Body, "2,077,449") {
+		t.Error(`footer body missing formatted cache read token count "2,077,449"`)
+	}
+}
+
+// TestHandleDashboard_SessionsCachedTokensTooltip verifies that the Running
+// Sessions table renders the cached token annotation with an explanatory tooltip
+// when CacheReadTokens is non-zero.
+func TestHandleDashboard_SessionsCachedTokensTooltip(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 3, 24, 12, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name            string
+		cacheReadTokens int64
+		wantTooltip     bool
+		wantFormatted   string
+	}{
+		{
+			name:            "non-zero cache read tokens renders tooltip",
+			cacheReadTokens: 763850,
+			wantTooltip:     true,
+			wantFormatted:   "763,850",
+		},
+		{
+			name:            "zero cache read tokens omits annotation",
+			cacheReadTokens: 0,
+			wantTooltip:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			snap := orchestrator.RuntimeSnapshotResult{
+				GeneratedAt: now,
+				Running: []orchestrator.SnapshotRunningEntry{
+					{
+						IssueID:          "id-1",
+						Identifier:       "MT-1",
+						State:            "In Progress",
+						StartedAt:        now.Add(-5 * time.Minute),
+						AgentTotalTokens: 1000,
+						CacheReadTokens:  tt.cacheReadTokens,
+					},
+				},
+			}
+			ts := dashboardServer(t, fixedSnapshot(snap), "1.0.0", nil)
+
+			dr := getDashboard(t, ts, "/")
+
+			if dr.StatusCode != http.StatusOK {
+				t.Fatalf("GET / status = %d, want %d", dr.StatusCode, http.StatusOK)
+			}
+
+			// The <small> tag in the sessions table is guarded by {{if .CacheReadTokens}},
+			// so the tooltip only appears in the table rows when cached tokens are non-zero.
+			wantTitle := `<small title="Prompt cache read tokens`
+			gotTooltip := strings.Contains(dr.Body, wantTitle)
+			if gotTooltip != tt.wantTooltip {
+				t.Errorf("body contains sessions-table tooltip %q = %v, want %v", wantTitle, gotTooltip, tt.wantTooltip)
+			}
+
+			if tt.wantFormatted != "" && !strings.Contains(dr.Body, tt.wantFormatted) {
+				t.Errorf("body missing formatted cache read count %q", tt.wantFormatted)
+			}
+		})
+	}
+}
+
+func TestMapRunHistoryEntries_DisplayID(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		identifier string
+		displayID  string
+		wantID     string
+	}{
+		{
+			name:       "DisplayID set — used as Identifier",
+			identifier: "42",
+			displayID:  "owner/repo#42",
+			wantID:     "owner/repo#42",
+		},
+		{
+			name:       "DisplayID empty — falls back to Identifier",
+			identifier: "PROJ-99",
+			displayID:  "",
+			wantID:     "PROJ-99",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			runs := []RunHistoryEntry{
+				{
+					Identifier:  tt.identifier,
+					DisplayID:   tt.displayID,
+					Attempt:     1,
+					Status:      "succeeded",
+					StartedAt:   "2026-03-24T10:00:00Z",
+					CompletedAt: "2026-03-24T10:05:00Z",
+				},
+			}
+
+			got := mapRunHistoryEntries(runs)
+
+			if len(got) != 1 {
+				t.Fatalf("len = %d, want 1", len(got))
+			}
+			if got[0].Identifier != tt.wantID {
+				t.Errorf("Identifier = %q, want %q", got[0].Identifier, tt.wantID)
+			}
+		})
 	}
 }

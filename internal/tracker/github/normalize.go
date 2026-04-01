@@ -60,7 +60,10 @@ type searchResponse struct {
 // Parent, Comments, and BlockedBy are set to list-path defaults (nil,
 // nil, empty slice respectively); callers requiring full population
 // must use [GitHubAdapter.FetchIssueByID].
-func normalizeIssue(gi githubIssue, activeStates, terminalStates []string) domain.Issue {
+//
+// DisplayID is left empty; callers that know the repository
+// owner and name should set it to "owner/repo#N" after normalization.
+func normalizeIssue(gi githubIssue, activeStates, terminalStates []string, handoffState string) domain.Issue {
 	num := strconv.Itoa(gi.Number)
 
 	desc := ""
@@ -89,7 +92,7 @@ func normalizeIssue(gi githubIssue, activeStates, terminalStates []string) domai
 		Title:       gi.Title,
 		Description: desc,
 		Priority:    nil,
-		State:       extractState(gi.Labels, gi.State, activeStates, terminalStates),
+		State:       extractState(gi.Labels, gi.State, activeStates, terminalStates, handoffState),
 		BranchName:  "",
 		URL:         gi.HTMLURL,
 		Labels:      labels,
@@ -103,17 +106,27 @@ func normalizeIssue(gi githubIssue, activeStates, terminalStates []string) domai
 	}
 }
 
+// qualifyDisplayID sets DisplayID to "owner/repo#N" so
+// dashboard and API consumers see a fully qualified reference.
+// It is idempotent: an already-qualified DisplayID is not overwritten.
+func (a *GitHubAdapter) qualifyDisplayID(issue *domain.Issue) {
+	if issue.DisplayID != "" {
+		return
+	}
+	issue.DisplayID = a.owner + "/" + a.repo + "#" + issue.Identifier
+}
+
 // normalizeBlockers converts blocker issue responses to
 // [domain.BlockerRef] values. Returns a non-nil empty slice when
 // input is empty.
-func normalizeBlockers(blockers []githubIssue, activeStates, terminalStates []string) []domain.BlockerRef {
+func normalizeBlockers(blockers []githubIssue, activeStates, terminalStates []string, handoffState string) []domain.BlockerRef {
 	result := make([]domain.BlockerRef, 0, len(blockers))
 	for _, b := range blockers {
 		num := strconv.Itoa(b.Number)
 		result = append(result, domain.BlockerRef{
 			ID:         num,
 			Identifier: num,
-			State:      extractState(b.Labels, b.State, activeStates, terminalStates),
+			State:      extractState(b.Labels, b.State, activeStates, terminalStates, handoffState),
 		})
 	}
 	return result

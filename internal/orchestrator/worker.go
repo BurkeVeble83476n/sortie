@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -161,13 +162,9 @@ func normalizeAttempt(attempt *int) int {
 // isActiveState performs a case-insensitive check of state against the
 // active states list. Returns true if state is in the active set.
 func isActiveState(state string, activeStates []string) bool {
-	lower := strings.ToLower(state)
-	for _, s := range activeStates {
-		if strings.ToLower(s) == lower {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(activeStates, func(s string) bool {
+		return strings.EqualFold(s, state)
+	})
 }
 
 // isTurnSuccess returns true when the turn result exit reason indicates
@@ -331,7 +328,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 		}
 	}()
 
-	// Phase 1: Workspace Preparation.
+	// Prepare the workspace directory, running lifecycle hooks.
 	wsResult, err := workspace.Prepare(ctx, workspace.PrepareParams{
 		Root:          cfg.Workspace.Root,
 		Identifier:    issue.Identifier,
@@ -472,7 +469,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 		return
 	}
 
-	// Phase 2: Agent Session Start.
+	// Start the agent session inside the prepared workspace.
 	session, err = deps.AgentAdapter.StartSession(ctx, domain.StartSessionParams{
 		WorkspacePath:            wsResult.Path,
 		AgentConfig:              toDomainAgentConfig(cfg.Agent),
@@ -501,7 +498,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 	sessionID = session.ID
 	logger.Info("agent session started", slog.String("session_id", session.ID))
 
-	// Phase 3: Multi-Turn Loop.
+	// Execute turns until the issue leaves an active state or max_turns is reached.
 	maxTurns := cfg.Agent.MaxTurns
 	if maxTurns < 1 {
 		logger.Warn("agent max_turns is less than 1; clamping to 1", slog.Int("configured_max_turns", cfg.Agent.MaxTurns))
@@ -511,7 +508,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 	activeStates := cfg.Tracker.ActiveStates
 
 	for {
-		// 3a: Build turn-appropriate prompt.
+		// Render the prompt template for this turn.
 		issueMap := issue.ToTemplateMap()
 		rendered, err := prompt.BuildTurnPrompt(tmpl, issueMap, attemptInt, turnNumber, maxTurns)
 		if err != nil {
@@ -540,7 +537,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 
 		logger.Info("turn started", slog.Int("turn_number", turnNumber), slog.Int("max_turns", maxTurns))
 
-		// 3b: Execute turn.
+		// Send the rendered prompt to the agent and wait for completion.
 		turnResult, err := deps.AgentAdapter.RunTurn(ctx, session, domain.RunTurnParams{
 			Prompt: rendered,
 			Issue:  issue,
@@ -577,7 +574,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 		turnsCompleted++
 		logger.Info("turn completed", slog.Int("turn_number", turnNumber), slog.Int("max_turns", maxTurns))
 
-		// 3c: Check for turn-level failure exit reasons.
+		// Non-success exit reasons (timeout, max_tokens, etc.) are terminal.
 		if !isTurnSuccess(turnResult.ExitReason) {
 			stopSessionBestEffort(ctx, deps.AgentAdapter, session, cfg, logger)
 			finishWorkspace()
@@ -602,7 +599,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 			return
 		}
 
-		// 3d: Re-check tracker issue state.
+		// Refresh the tracker state to detect external transitions.
 		refreshed, err := deps.TrackerAdapter.FetchIssueStatesByIDs(ctx, []string{issue.ID})
 		if err != nil {
 			stopSessionBestEffort(ctx, deps.AgentAdapter, session, cfg, logger)
@@ -640,7 +637,7 @@ func RunWorkerAttempt(ctx context.Context, issue domain.Issue, attempt *int, dep
 		turnNumber++
 	}
 
-	// Phase 4: Clean Exit.
+	// Tear down the session and workspace before reporting success.
 	stopSessionBestEffort(ctx, deps.AgentAdapter, session, cfg, logger)
 	finishWorkspace()
 

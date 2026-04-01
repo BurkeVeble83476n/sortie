@@ -75,6 +75,7 @@ type dashboardRetryEntry struct {
 type dashboardRunHistoryEntry struct {
 	Identifier   string
 	Attempt      int
+	Turns        int
 	Status       string
 	WorkflowFile string
 	StartedAt    string
@@ -235,8 +236,13 @@ func buildDashboardData(
 			}
 		}
 
+		displayID := e.Identifier
+		if e.DisplayID != "" {
+			displayID = e.DisplayID
+		}
+
 		running[i] = dashboardRunningEntry{
-			Identifier:      e.Identifier,
+			Identifier:      displayID,
 			State:           e.State,
 			TurnCount:       e.TurnCount,
 			Duration:        formatDuration(dur),
@@ -263,8 +269,13 @@ func buildDashboardData(
 	})
 	retrying := make([]dashboardRetryEntry, len(sortedRetrying))
 	for i, e := range sortedRetrying {
+		retryDisplayID := e.Identifier
+		if e.DisplayID != "" {
+			retryDisplayID = e.DisplayID
+		}
+
 		retrying[i] = dashboardRetryEntry{
-			Identifier: e.Identifier,
+			Identifier: retryDisplayID,
 			Attempt:    e.Attempt,
 			DueIn:      formatRelativeTime(e.DueAtMS, snap.GeneratedAt),
 			Error:      e.Error,
@@ -299,9 +310,15 @@ func mapRunHistoryEntries(runs []RunHistoryEntry) []dashboardRunHistoryEntry {
 			wf = "\u2014" // em dash for missing
 		}
 
+		histDisplayID := r.Identifier
+		if r.DisplayID != "" {
+			histDisplayID = r.DisplayID
+		}
+
 		out[i] = dashboardRunHistoryEntry{
-			Identifier:   r.Identifier,
+			Identifier:   histDisplayID,
 			Attempt:      r.Attempt,
+			Turns:        r.TurnsCompleted,
 			Status:       r.Status,
 			WorkflowFile: wf,
 			StartedAt:    r.StartedAt,
