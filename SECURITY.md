@@ -9,9 +9,9 @@ critical and high severity security patches.
 
 | Version   | Supported                        |
 |-----------|----------------------------------|
-| 1.3.x     | Yes                              |
-| 1.2.x     | Security patches until July 2026 |
-| < 1.2     | No                               |
+| 1.4.x     | Yes                              |
+| 1.3.x     | Security patches until July 2026 |
+| < 1.3     | No                               |
 
 When a new minor version is released (e.g., 1.1.0), the previous minor (e.g., 1.0.x)
 enters this 3-month grace period. After the grace period ends, only the current
