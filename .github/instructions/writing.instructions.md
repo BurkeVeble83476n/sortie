@@ -208,11 +208,13 @@ These patterns signal machine-generated text. Avoid them in all project document
 ## Punctuation
 
 - Use the Oxford comma: "adapters, persistence, and logging."
-- Place commas outside closing quotation marks when the comma is not part of the quoted text: words like "foo", "bar", and "baz".
+- Commas and periods MUST NOT appear inside closing quotation marks unless they are part of the quoted text itself. Place them outside.
+  - **✅ CORRECT:** `words like "foo", "bar", and "baz".`
+  - **❌ WRONG:** `words like "foo," "bar," and "baz."`
 - Use straight quotes and apostrophes, not curly/smart quotes.
 - Exclamation marks are reserved for genuine warnings. Do not use for enthusiasm.
 - Sentences can start with "But" and "And".
 
 ## Language
 
-All project prose is in American English. Use American spelling in all identifiers, comments, docs, and messages: "initialize", "normalize", "behavior", "color".
+This rule applies regardless of the language the user communicates in. Even if instructions, questions, or feedback arrive in Russian, Ukrainian, or any other language, all output — code, comments, docs, commit messages, PR descriptions — MUST be in American English. The only exception is when the user explicitly and unambiguously requests otherwise for a specific artifact.
