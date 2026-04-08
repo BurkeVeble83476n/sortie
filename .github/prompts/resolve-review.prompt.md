@@ -97,6 +97,8 @@ Where:
 
 Do NOT reply to comments that were Applied, Deferred, Already Addressed, Stale, or flagged for Discussion — those are handled by code changes, issues, or human follow-up.
 
+**CRITICAL:** Copilot GitHub reviewer called `@copilot`, NOT `@copilot-pull-request-reviewer` and NOT `@github-copilot`. STOP pinging various people by the wrong name.
+
 ## Step 5: Produce Summary
 
 ```markdown

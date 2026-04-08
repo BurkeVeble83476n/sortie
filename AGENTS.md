@@ -18,6 +18,7 @@ Spec-first, agent-developed orchestration service. The architecture document is 
 - **Generic naming in core code.** Use `agent_*`, `tracker_*`, `session_*` in orchestrator core. Never `jira_*`, `claude_*`, `codex_*` outside their adapter packages.
 - **Integration tests are env-gated.** `SORTIE_JIRA_TEST=1` for Jira, `SORTIE_GITHUB_TEST=1` for GitHub adapter integration tests, `SORTIE_GITHUB_E2E=1` for GitHub E2E orchestrator tests (also requires `SORTIE_GITHUB_TOKEN` and `SORTIE_GITHUB_PROJECT`), `SORTIE_CLAUDE_TEST=1` for Claude Code, `SORTIE_COPILOT_TEST=1` for Copilot. Without these vars, integration tests must skip cleanly — never fail.
 - **SQLite library is `modernc.org/sqlite` only.** Never `mattn/go-sqlite3` — CGo breaks the single-binary zero-dependency deployment model.
+- Copilot GitHub reviewer called "@copilot", NOT "@copilot-pull-request-reviewer" and NOT "@github-copilot". STOP pinging various people by the wrong name.
 
 ## Boundaries
 
