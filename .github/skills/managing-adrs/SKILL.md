@@ -43,15 +43,18 @@ script — this prevents duplicate numbers when multiple ADRs are created in par
 **No number assigned** (standalone use):
 
 ```bash
-bash .claude/skills/managing-adrs/scripts/next_adr_number.sh
+bash scripts/next_adr_number.sh
 # Output: 0004
 ```
 
 For batch allocation (multiple ADRs in one session):
 
 ```bash
-bash .claude/skills/managing-adrs/scripts/next_adr_number.sh --count 3
-# Output: 0004, 0005, 0006 (one per line)
+bash scripts/next_adr_number.sh --count 3
+# Output:
+# 0004
+# 0005
+# 0006
 ```
 
 Allocate all numbers upfront before creating any files. This avoids the script returning
@@ -83,6 +86,7 @@ Check every file in `docs/decisions/` (excluding README.md):
 - [ ] YAML frontmatter has `status`, `date` fields
 - [ ] `date` is valid `YYYY-MM-DD`
 - [ ] `status` is one of: `proposed`, `accepted`, `deprecated`, `superseded by NNNN`
+- [ ] `decision-makers` is present and non-empty when `status` is `accepted`
 - [ ] H1 title exists and is an imperative phrase
 - [ ] Sections present: "Context and Problem Statement", "Considered Options", "Decision Outcome"
 - [ ] "Decision Outcome" contains `Chosen option: **` pattern
