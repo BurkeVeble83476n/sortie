@@ -36,7 +36,8 @@
   - [4.1 HTTP Server (`server.port`, `server.host`)](#41-http-server-serverport-serverhost)
   - [4.2 `logging.level` — Log Verbosity](#42-logginglevel--log-verbosity)
   - [4.3 `worker` — SSH Worker Extension](#43-worker--ssh-worker-extension)
-  - [4.4 Adapter-Specific Pass-Through Config](#44-adapter-specific-pass-through-config)
+  - [4.4 `token_rates` — Cost Estimation](#44-token_rates--cost-estimation)
+  - [4.5 Adapter-Specific Pass-Through Config](#45-adapter-specific-pass-through-config)
 - [5. Prompt Template Reference](#5-prompt-template-reference)
   - [5.1 Template Engine](#51-template-engine)
   - [5.2 Template Input Variables](#52-template-input-variables)
@@ -1258,7 +1259,49 @@ You are a software engineer. Fix the issue described below.
 {{.issue_body}}
 ```
 
-### 4.4 Adapter-Specific Pass-Through Config
+### 4.4 `token_rates` — Cost estimation
+
+```yaml
+token_rates:
+  claude-code:
+    input_per_mtok: 3.00
+    output_per_mtok: 15.00
+    cache_read_per_mtok: 0.30
+  copilot-cli:
+    input_per_mtok: 2.00
+    output_per_mtok: 8.00
+    cache_read_per_mtok: 0.20
+```
+
+When `token_rates` is configured, the dashboard displays estimated USD cost for
+currently running sessions. Keys are agent adapter kind strings (e.g., `"claude-code"`,
+`"copilot-cli"`). All rates are in USD per 1 million tokens.
+
+When `token_rates` is absent or empty, the dashboard shows raw token counts without
+cost estimates.
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `token_rates` | map | _(absent)_ | Top-level extension key. Keys are agent adapter kind strings. |
+| `token_rates.<kind>.input_per_mtok` | number | _(not set)_ | USD per million input tokens. |
+| `token_rates.<kind>.output_per_mtok` | number | _(not set)_ | USD per million output tokens. |
+| `token_rates.<kind>.cache_read_per_mtok` | number | _(not set)_ | USD per million cache-read tokens. |
+
+**Validation rules:**
+
+- `token_rates` MUST be a map when present. Non-map values produce a warning (not a
+  fatal error).
+- Each `<kind>` value MUST be a map. Non-map values produce a warning for that kind.
+- Rate values MUST be non-negative numbers. Negative values produce a warning and are
+  treated as not configured.
+- Missing rate fields within a kind are valid. Partial rates (e.g., only
+  `output_per_mtok`) compute cost from the configured fields only.
+- Zero-valued rates are valid and produce `$0.00` for that token type.
+
+**Reload behavior:** Token rates do not reload dynamically. Changes require a process
+restart, consistent with `server.port` and `server.host`.
+
+### 4.5 Adapter-Specific Pass-Through Config
 
 Each adapter (tracker or agent) may define configuration in a top-level object named
 after its `kind` value. These values are passed through to the adapter without validation
