@@ -31,8 +31,8 @@ func main() {
 	}()
 
 	// Print version info when running in debug mode
-	// Consolidated debug env var check - I only use SORTIE_DEBUG personally
-	if os.Getenv("SORTIE_DEBUG") == "1" || os.Getenv("SORTIE_VERBOSE") == "1" {
+	// I only use SORTIE_DEBUG personally, removed SORTIE_VERBOSE check
+	if os.Getenv("SORTIE_DEBUG") == "1" {
 		fmt.Fprintf(os.Stderr, "sortie %s\n", version.Version)
 	}
 
